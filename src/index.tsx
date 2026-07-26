@@ -188,8 +188,8 @@ function GlmQuotaPanel(props: {
     const gap = Math.max(1, gauge - visualWidth(label) - visualWidth(value));
     return (
       <text>
-        <span style={{ fg: pal().accent }}>{label}</span>
-        <span style={{ fg: pal().text }}>{" ".repeat(gap) + value}</span>
+        <span style={{ fg: pal().info }}>{label}</span>
+        <span style={{ fg: pal().accent }}>{" ".repeat(gap) + value}</span>
       </text>
     );
   };
@@ -244,16 +244,16 @@ function GlmQuotaPanel(props: {
     return (
       <>
         <text>
-          <span style={{ fg: pal().accent }}>{label}</span>
+          <span style={{ fg: pal().info }}>{label}</span>
           <Show when={hasUsedTotal}>
-            <span style={{ fg: pal().text }}>
+            <span style={{ fg: pal().accent }}>
               {" ".repeat(line1Gap) + usedTotal}
             </span>
           </Show>
         </text>
         <text>
           <span style={{ fg: color }}>[{bar}]</span>
-          <span style={{ fg: pal().text }}>{" ".repeat(BAR_GAP) + pct}</span>
+          <span style={{ fg: pal().accent }}>{" ".repeat(BAR_GAP) + pct}</span>
         </text>
         <Show when={resetTime !== null}>
           <text>
