@@ -15,7 +15,7 @@ if (!m) {
 let [major, minor, patch] = [Number(m[1]), Number(m[2]), Number(m[3])];
 minor += 1;
 patch = 0;
-if (minor > 10) {
+if (minor >= 10) {
   minor = 0;
   patch = 0;
   major += 1;
