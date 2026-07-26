@@ -182,11 +182,16 @@ function GlmQuotaPanel(props: {
     "\u2500".repeat(Math.max(1, panelWidth() - gutter())),
   );
 
-  const justify = (label: string, value: string): string => {
+  // ── Labeled value line: accent label + bright value, right-aligned ──
+  const labeledValue = (label: string, value: string): JSX.Element => {
     const gauge = panelWidth() - gutter();
-    const used = visualWidth(label) + visualWidth(value);
-    const gap = Math.max(1, gauge - used);
-    return label + " ".repeat(gap) + value;
+    const gap = Math.max(1, gauge - visualWidth(label) - visualWidth(value));
+    return (
+      <text>
+        <span style={{ fg: pal().accent }}>{label}</span>
+        <span style={{ fg: pal().text }}>{" ".repeat(gap) + value}</span>
+      </text>
+    );
   };
 
   // ── Folded header percentage (5h usage) ──
@@ -239,9 +244,9 @@ function GlmQuotaPanel(props: {
     return (
       <>
         <text>
-          <span style={{ fg: pal().text }}>{label}</span>
+          <span style={{ fg: pal().accent }}>{label}</span>
           <Show when={hasUsedTotal}>
-            <span style={{ fg: pal().muted }}>
+            <span style={{ fg: pal().text }}>
               {" ".repeat(line1Gap) + usedTotal}
             </span>
           </Show>
@@ -352,16 +357,12 @@ function GlmQuotaPanel(props: {
 
         {/* Platform info */}
         <Show when={platformName()}>
-          <text fg={pal().muted}>
-            {justify(t().platform + ":", platformName())}
-          </text>
+          {labeledValue(t().platform + ":", platformName())}
         </Show>
 
         {/* Plan level */}
         <Show when={quotaData()?.level}>
-          <text fg={pal().muted}>
-            {justify(t().plan + ":", quotaData()!.level!)}
-          </text>
+          {labeledValue(t().plan + ":", quotaData()!.level!)}
         </Show>
 
         {/* Loading state */}

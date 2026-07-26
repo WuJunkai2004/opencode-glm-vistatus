@@ -102,6 +102,7 @@ const FALLBACK = {
   primary: "#8B9DAF",
   text: "#C5C5BB",
   muted: "#7A7A72",
+  accent: "#C9A0DC",
   success: "#9CAF8B",
   warning: "#C5B88D",
   error: "#B08A8A",
@@ -115,6 +116,7 @@ export interface ThemePalette {
   primary: string;
   text: string;
   muted: string;
+  accent: string;
   success: string;
   warning: string;
   error: string;
@@ -129,6 +131,7 @@ export function buildPalette(theme: TuiThemeCurrent): ThemePalette {
     primary: sat("primary", FALLBACK.primary),
     text: sat("text", FALLBACK.text),
     muted: sat("textMuted", FALLBACK.muted),
+    accent: FALLBACK.accent,
     success: sat("success", FALLBACK.success),
     warning: sat("warning", FALLBACK.warning),
     error: sat("error", FALLBACK.error),
