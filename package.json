@@ -12,7 +12,7 @@
     "./tui": {
       "import": "./dist/tui.js",
       "config": {
-        "enabled": true
+        "enabled": "true"
       }
     }
   },
