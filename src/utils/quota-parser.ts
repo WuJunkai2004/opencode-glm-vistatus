@@ -6,9 +6,6 @@
 
 const TOKEN_LIMIT_TYPE = "TOKENS_LIMIT";
 const TIME_LIMIT_TYPE = "TIME_LIMIT";
-const FIVE_HOUR_TOKEN_LIMIT_LABEL = "Token usage(5 Hour)";
-const WEEKLY_TOKEN_LIMIT_LABEL = "Token usage(Weekly)";
-const MCP_LIMIT_LABEL = "MCP usage(1 Month)";
 const DEFAULT_TOKEN_LIMIT = 4000000;
 
 export interface QuotaItem {
