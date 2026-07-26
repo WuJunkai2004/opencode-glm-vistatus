@@ -1,0 +1,37 @@
+name: Publish to npm
+
+# Fires only when VERSION.txt changes on main (e.g. a release.yml commit,
+# or a manual edit). Syncs package.json, builds, and publishes to npm.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "VERSION.txt"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Sync VERSION.txt → package.json + _version.ts
+        run: |
+          npm run sync-version
+          npm run version
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish
+        run: npm publish --provenance --access public
