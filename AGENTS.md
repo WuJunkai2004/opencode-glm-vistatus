@@ -13,11 +13,23 @@ npm run build:tui    # esbuild bundle only (skips tsc)
 
 No test suite exists. Verify changes with `npm run typecheck && npm run build`.
 
+### Versioning: `VERSION.txt` is the single source of truth
+
+`VERSION.txt` (e.g. `0.1.0`) drives everything — never hand-edit `package.json`'s
+`version` directly. `npm run sync-version` copies `VERSION.txt` → `package.json`,
+then `npm run version` regenerates `src/_version.ts` from it. `prepublishOnly`
+runs both automatically.
+
+- `release.yml` (manual `workflow_dispatch`): bumps per rule (`minor+1, patch=0`;
+  `minor>10` rolls over to `major+1`), commits, tags `vX.Y.Z`, creates a GitHub
+  Release. That VERSION.txt commit then triggers `publish.yml`.
+- `publish.yml`: fires on any `VERSION.txt` change on `main` → syncs, builds,
+  `npm publish`. Requires the `NPM_TOKEN` repo secret.
+
 ### Gotcha: `src/_version.ts` is generated & gitignored
 
 `build.tui.mjs` auto-creates it from `package.json` if missing; without it the
-bundle build fails. `npm run version` regenerates it on release. Never hand-edit
-or commit it.
+bundle build fails. Never hand-edit or commit it.
 
 ## Build internals (matter when editing the bundler)
 
