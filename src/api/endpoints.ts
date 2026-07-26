@@ -3,13 +3,13 @@
  * Source: opencode-glm-quota/src/api/endpoints.ts
  */
 
-export type Platform = "ZAI" | "ZHIPU"
+export type Platform = "ZAI" | "ZHIPU";
 
 interface PlatformEndpoints {
-  readonly base: string
-  readonly quotaLimit: string
-  readonly modelUsage: string
-  readonly toolUsage: string
+  readonly base: string;
+  readonly quotaLimit: string;
+  readonly modelUsage: string;
+  readonly toolUsage: string;
 }
 
 const ENDPOINTS: Record<Platform, PlatformEndpoints> = {
@@ -25,8 +25,8 @@ const ENDPOINTS: Record<Platform, PlatformEndpoints> = {
     modelUsage: "https://open.bigmodel.cn/api/monitor/usage/model-usage",
     toolUsage: "https://open.bigmodel.cn/api/monitor/usage/tool-usage",
   },
-}
+};
 
 export function getEndpoints(platform: Platform): PlatformEndpoints {
-  return ENDPOINTS[platform] ?? ENDPOINTS.ZAI
+  return ENDPOINTS[platform] ?? ENDPOINTS.ZAI;
 }

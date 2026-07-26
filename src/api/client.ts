@@ -8,16 +8,16 @@
  * - Error handling returns null instead of throwing (TUI keeps showing data)
  */
 
-import type { Platform } from "./endpoints"
-import { getEndpoints } from "./endpoints"
-import { getTimeWindowQueryParams } from "../utils/time-window"
+import type { Platform } from "./endpoints";
+import { getEndpoints } from "./endpoints";
+import { getTimeWindowQueryParams } from "../utils/time-window";
 
-const REQUEST_TIMEOUT_MS = 10000
+const REQUEST_TIMEOUT_MS = 10000;
 
 export interface QuotaResult {
-  quotaData: Record<string, unknown> | null
-  modelData: Record<string, unknown> | null
-  toolData: Record<string, unknown> | null
+  quotaData: Record<string, unknown> | null;
+  modelData: Record<string, unknown> | null;
+  toolData: Record<string, unknown> | null;
 }
 
 /**
@@ -29,11 +29,11 @@ async function fetchJson(
   token: string,
   queryParams?: string,
 ): Promise<Record<string, unknown> | null> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const fullUrl = queryParams ? `${url}?${queryParams}` : url
+    const fullUrl = queryParams ? `${url}?${queryParams}` : url;
     const res = await fetch(fullUrl, {
       method: "GET",
       headers: {
@@ -42,19 +42,19 @@ async function fetchJson(
         "Content-Type": "application/json",
       },
       signal: controller.signal,
-    })
+    });
 
     if (!res.ok) {
-      return null
+      return null;
     }
 
-    const json = await res.json()
-    return json as Record<string, unknown>
+    const json = await res.json();
+    return json as Record<string, unknown>;
   } catch {
     // Network timeout, parse error, etc. — return null for graceful degradation
-    return null
+    return null;
   } finally {
-    clearTimeout(timeout)
+    clearTimeout(timeout);
   }
 }
 
@@ -62,19 +62,22 @@ async function fetchJson(
  * Fetch all quota data from the three monitoring endpoints.
  * Uses Promise.allSettled so partial failures don't lose all data.
  */
-export async function fetchAllQuota(token: string, platform: Platform): Promise<QuotaResult> {
-  const endpoints = getEndpoints(platform)
-  const queryParams = getTimeWindowQueryParams()
+export async function fetchAllQuota(
+  token: string,
+  platform: Platform,
+): Promise<QuotaResult> {
+  const endpoints = getEndpoints(platform);
+  const queryParams = getTimeWindowQueryParams();
 
   const [quotaRes, modelRes, toolRes] = await Promise.allSettled([
     fetchJson(endpoints.quotaLimit, token),
     fetchJson(endpoints.modelUsage, token, queryParams),
     fetchJson(endpoints.toolUsage, token, queryParams),
-  ])
+  ]);
 
-  const quotaData = quotaRes.status === "fulfilled" ? quotaRes.value : null
-  const modelData = modelRes.status === "fulfilled" ? modelRes.value : null
-  const toolData = toolRes.status === "fulfilled" ? toolRes.value : null
+  const quotaData = quotaRes.status === "fulfilled" ? quotaRes.value : null;
+  const modelData = modelRes.status === "fulfilled" ? modelRes.value : null;
+  const toolData = toolRes.status === "fulfilled" ? toolRes.value : null;
 
-  return { quotaData, modelData, toolData }
+  return { quotaData, modelData, toolData };
 }
