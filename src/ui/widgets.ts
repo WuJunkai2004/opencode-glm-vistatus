@@ -58,13 +58,27 @@ export function truncateVisual(s: string, maxCols: number): string {
 }
 
 /**
- * Render a fixed-width progress bar using █ (filled) and ░ (empty).
+ * Render a fixed-width progress bar using █, ▓, ▒, and ░ for sub-character precision.
  * @param percent - 0-100, clamped
  * @param width - number of characters
  */
 export function progressBar(percent: number, width: number): string {
   const clamped = Math.max(0, Math.min(100, percent));
-  const filled = Math.round((clamped / 100) * width);
-  const empty = Math.max(0, width - filled);
-  return "\u2588".repeat(filled) + "\u2591".repeat(empty);
+  const exactFilled = (clamped / 100) * width;
+  const filled = Math.floor(exactFilled);
+  if (filled >= width) {
+    return "\u2588".repeat(width); // █
+  }
+  const fraction = exactFilled - filled;
+  let transition = "";
+  let empty = Math.max(0, width - filled);
+  if (fraction >= 2 / 3) {
+    transition = "\u2593"; // Dark ▓
+    empty -= 1;
+  } else if (fraction >= 1 / 3) {
+    transition = "\u2592"; // Medium ▒
+    empty -= 1;
+  }
+  // if (fraction < 1/3) , no transition character is needed, leave it to the Light ░ fill later
+  return "\u2588".repeat(filled) + transition + "\u2591".repeat(empty);
 }
