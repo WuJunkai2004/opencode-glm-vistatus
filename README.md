@@ -23,16 +23,25 @@
 
 ## 安装
 
-### 方式一：npm 安装（推荐）
+### 方式一：OpenCode 命令安装（推荐）
+
+在 OpenCode 中按 **`Ctrl + P`** 打开命令面板，搜索 **`install plugin`**，输入：
+
+```
+opencode-glm-vistatus
+```
+
+回车即可完成安装与配置。
+
+### 方式二：npx 一键安装
 
 ```bash
-npm install opencode-glm-vistatus
 npx opencode-glm-vistatus
 ```
 
-安装脚本会自动修改跨平台 OpenCode 配置目录下的 `tui.jsonc`，注册插件。
+安装脚本会自动写入跨平台 OpenCode 配置目录下的 `tui.jsonc`（必要时同步到 `opencode.jsonc`），注册插件。插件名为 `opencode-glm-vistatus`，不带 `@latest`。
 
-### 方式二：手动配置
+### 方式三：手动配置
 
 在配置目录的 `tui.jsonc` 中添加：
 
@@ -48,7 +57,44 @@ npx opencode-glm-vistatus
 | Windows | `%APPDATA%\opencode\` |
 | macOS / Linux | `~/.config/opencode/` |
 
-重启 OpenCode 即可在侧边栏看到 GLM 额度面板。
+### 重启 OpenCode
+
+进入任意 session，侧边栏即可看到 GLM 额度面板。
+
+## 卸载
+
+**1. 移除插件配置**
+
+从 `tui.jsonc`（及 `opencode.jsonc`，若存在）的 `plugin` 数组中删除 `"opencode-glm-vistatus"`：
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "plugin": []   // 删除 "opencode-glm-vistatus" 这一项
+}
+```
+
+**2. 卸载 npm 全局包（可选，若曾 `npm i -g` 安装）**
+
+```bash
+npm uninstall -g opencode-glm-vistatus
+```
+
+**3. 清除 OpenCode 插件缓存**
+
+由于 [OpenCode 已知问题 #6774](https://github.com/anomalyco/opencode/issues/6774)，插件会被缓存到本地，删除配置后建议一并清缓存：
+
+```powershell
+# Windows PowerShell
+Remove-Item -Recurse -Force "$env:USERPROFILE\.cache\opencode\packages\opencode-glm-vistatus"
+```
+
+```bash
+# macOS / Linux
+rm -rf ~/.cache/opencode/packages/opencode-glm-vistatus
+```
+
+**4. 重启 OpenCode**
 
 ## 前置条件
 

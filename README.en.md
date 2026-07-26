@@ -23,17 +23,28 @@ English | [简体中文](./README.md)
 
 ## Installation
 
-### Option 1: npm install (recommended)
+### Option 1: OpenCode command install (recommended)
+
+In OpenCode, press **`Ctrl + P`** to open the command palette, search for **`install plugin`**, and enter:
+
+```
+opencode-glm-vistatus
+```
+
+Press Enter to complete the installation and configuration.
+
+### Option 2: npx one-shot install
 
 ```bash
-npm install opencode-glm-vistatus
 npx opencode-glm-vistatus
 ```
 
-The install script automatically updates `tui.jsonc` in the cross-platform
-OpenCode config directory to register the plugin.
+The install script automatically writes to `tui.jsonc` in the cross-platform
+OpenCode config directory (and syncs to `opencode.jsonc` when present) to
+register the plugin. The plugin spec is the bare name `opencode-glm-vistatus`
+(no `@latest`).
 
-### Option 2: manual configuration
+### Option 3: manual configuration
 
 Add the plugin to `tui.jsonc` in your config directory:
 
@@ -49,7 +60,47 @@ Add the plugin to `tui.jsonc` in your config directory:
 | Windows | `%APPDATA%\opencode\` |
 | macOS / Linux | `~/.config/opencode/` |
 
-Restart OpenCode to see the GLM quota panel in the sidebar.
+### Restart OpenCode
+
+Enter any session to see the GLM quota panel in the sidebar.
+
+## Uninstallation
+
+**1. Remove the plugin configuration**
+
+Delete `"opencode-glm-vistatus"` from the `plugin` array in `tui.jsonc`
+(and `opencode.jsonc`, if present):
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "plugin": []   // remove the "opencode-glm-vistatus" entry
+}
+```
+
+**2. Uninstall the global npm package (optional, if you ran `npm i -g`)**
+
+```bash
+npm uninstall -g opencode-glm-vistatus
+```
+
+**3. Clear the OpenCode plugin cache**
+
+Due to [OpenCode known issue #6774](https://github.com/anomalyco/opencode/issues/6774),
+plugins are cached locally; after removing the config it is recommended to
+clear the cache as well:
+
+```powershell
+# Windows PowerShell
+Remove-Item -Recurse -Force "$env:USERPROFILE\.cache\opencode\packages\opencode-glm-vistatus"
+```
+
+```bash
+# macOS / Linux
+rm -rf ~/.cache/opencode/packages/opencode-glm-vistatus
+```
+
+**4. Restart OpenCode**
 
 ## Prerequisites
 
