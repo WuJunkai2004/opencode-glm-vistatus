@@ -20,6 +20,11 @@ import {
 import { PLUGIN_VERSION } from "./_version";
 
 import { getCredentials } from "./utils/auth";
+import {
+  installGlmMcp,
+  GLM_MCP_SERVER_NAMES,
+  type Scope,
+} from "./utils/mcp-servers";
 import { fetchAllQuota } from "./api/client";
 import { parseQuotaData, type ParsedQuota } from "./utils/quota-parser";
 import { getPlatformName } from "./api/platforms";
@@ -37,7 +42,11 @@ import {
   quotaColor,
   type ThemePalette,
 } from "./ui/theme";
-import { getTranslations, type Translations } from "./ui/i18n";
+import {
+  getTranslations,
+  getMcpTranslations,
+  type Translations,
+} from "./ui/i18n";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -612,6 +621,131 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
           duration: 8000,
         });
         dialog?.clear();
+      },
+    },
+    {
+      title: "GLM: Install MCP Servers",
+      value: "glm.mcp",
+      description: "Install GLM Coding Plan MCP servers",
+      slash: { name: "glm-mcp-install" },
+      onSelect: (dialog) => {
+        const mi18n = getMcpTranslations(langZH());
+        const creds = getCredentials();
+        if (!creds) {
+          api.ui.toast({
+            variant: "error",
+            message: mi18n.noCred,
+          });
+          dialog?.clear();
+          return;
+        }
+
+        const { token, platform } = creds;
+
+        const projectDir = api.state.path.directory || process.cwd() || ".";
+
+        // ── Step 1: scope ──
+        dialog?.replace(() => (
+          <api.ui.DialogSelect
+            title={mi18n.scopeTitle}
+            options={[
+              {
+                title: mi18n.local,
+                description: mi18n.localDesc,
+                value: "local" as Scope,
+              },
+              {
+                title: mi18n.global,
+                description: mi18n.globalDesc,
+                value: "global" as Scope,
+              },
+            ]}
+            onSelect={(opt: { value: Scope }) => showServerPicker(opt.value)}
+          />
+        ));
+
+        // ── Step 2: server multi-select ──
+        function showServerPicker(scope: Scope) {
+          let selected = new Set<string>(GLM_MCP_SERVER_NAMES);
+
+          function render() {
+            const snap = new Set(selected);
+            const allOn = snap.size === GLM_MCP_SERVER_NAMES.length;
+            const scopeLabel = mi18n.scopeLabel(scope);
+
+            dialog?.replace(() => (
+              <api.ui.DialogSelect
+                title={mi18n.pickTitle}
+                placeholder={mi18n.pickHint}
+                options={[
+                  ...GLM_MCP_SERVER_NAMES.map((name) => {
+                    const meta = mi18n.servers[name];
+                    return {
+                      title: `${snap.has(name) ? "\u2713" : "\u25cb"}  ${meta.label}`,
+                      description: meta.desc,
+                      value: name,
+                    };
+                  }),
+                  {
+                    title: `${allOn ? "\u25cb" : "\u2713"}  ${allOn ? mi18n.deselectAll : mi18n.selectAll}`,
+                    value: "__bulk",
+                  },
+                  {
+                    title:
+                      snap.size > 0
+                        ? mi18n.confirm(snap.size, scopeLabel)
+                        : mi18n.noneSelected,
+                    value: "__install",
+                    disabled: snap.size === 0,
+                  },
+                ]}
+                onSelect={(opt: { value: string }) => {
+                  if (opt.value === "__install") {
+                    const result = installGlmMcp(
+                      token,
+                      platform,
+                      scope,
+                      projectDir,
+                      snap,
+                    );
+                    if (result.ok) {
+                      api.ui.toast({
+                        variant: "success",
+                        title: mi18n.okTitle,
+                        message: mi18n.okMsg(
+                          result.added.length,
+                          result.skipped.length,
+                          mi18n.scopeLabel(result.scope),
+                          result.filePath,
+                        ),
+                        duration: 10000,
+                      });
+                    } else {
+                      api.ui.toast({
+                        variant: "error",
+                        title: mi18n.failTitle,
+                        message: result.error ?? "Unknown error",
+                        duration: 10000,
+                      });
+                    }
+                    dialog?.clear();
+                  } else if (opt.value === "__bulk") {
+                    selected = allOn
+                      ? new Set()
+                      : new Set(GLM_MCP_SERVER_NAMES);
+                    render();
+                  } else {
+                    if (selected.has(opt.value)) selected.delete(opt.value);
+                    else selected.add(opt.value);
+                    render();
+                  }
+                }}
+              />
+            ));
+          }
+
+          render();
+        }
       },
     },
   ]);
