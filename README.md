@@ -48,13 +48,13 @@ npx opencode-glm-vistatus
 ```jsonc
 {
   "$schema": "https://opencode.ai/tui.json",
-  "plugin": ["opencode-glm-vistatus"]
+  "plugin": ["opencode-glm-vistatus"],
 }
 ```
 
-| 系统 | 配置目录 |
-|------|----------|
-| Windows | `%APPDATA%\opencode\` |
+| 系统          | 配置目录              |
+| ------------- | --------------------- |
+| Windows       | `%APPDATA%\opencode\` |
 | macOS / Linux | `~/.config/opencode/` |
 
 ### 重启 OpenCode
@@ -70,7 +70,7 @@ npx opencode-glm-vistatus
 ```jsonc
 {
   "$schema": "https://opencode.ai/tui.json",
-  "plugin": []   // 删除 "opencode-glm-vistatus" 这一项
+  "plugin": [], // 删除 "opencode-glm-vistatus" 这一项
 }
 ```
 
@@ -105,12 +105,12 @@ rm -rf ~/.cache/opencode/packages/opencode-glm-vistatus
 
 ## 斜杠命令
 
-| 命令 | 功能 |
-|------|------|
-| `/glm-refresh` | 立即刷新额度数据 |
-| `/glm-lang` | 切换中 / 英文显示 |
-| `/glm-section` | 开关面板边框显隐 |
-| `/glm-config` | 查看当前配置 |
+| 命令           | 功能              |
+| -------------- | ----------------- |
+| `/glm-refresh` | 立即刷新额度数据  |
+| `/glm-lang`    | 切换中 / 英文显示 |
+| `/glm-section` | 开关面板边框显隐  |
+| `/glm-config`  | 查看当前配置      |
 
 语言与边框偏好会持久化保存（插件 KV），重启后保留。
 
@@ -133,13 +133,11 @@ MCP                     0/1,000
 
 进度条颜色规则：
 
-| 使用率 | 颜色 | 含义 |
-|--------|------|------|
-| < 70% | 绿 | 余量充足 |
-| 70-90% | 橙 | 接近上限 |
-| >= 90% | 红 | 即将耗尽 |
-
-> 注：颜色逻辑与缓存类插件相反 —— 使用率越高越红。
+| 使用率 | 颜色 | 含义     |
+| ------ | ---- | -------- |
+| < 70%  | 绿   | 余量充足 |
+| 70-90% | 橙   | 接近上限 |
+| >= 90% | 红   | 即将耗尽 |
 
 ## 构建
 
@@ -156,26 +154,24 @@ npm run typecheck    # tsc --noEmit
 
 ## 技术架构
 
-| 维度 | 实现 |
-|------|------|
-| 插件类型 | TUI 插件（sidebar_content 插槽） |
-| 渲染方式 | SolidJS (@opentui/solid) |
-| 数据来源 | Z.AI / ZHIPU Monitor API（每平台 3 端点） |
-| 凭证来源 | OpenCode auth.json / 环境变量 |
-| HTTP 客户端 | `fetch()` + AbortController 10s 超时 |
-| 错误策略 | `Promise.allSettled` 优雅降级（部分失败也展示） |
-| 刷新策略 | 挂载首次获取 + 每 5 分钟轮询 |
-
-> 认证头使用 `Authorization: <token>`，**不带** `Bearer` 前缀（GLM Monitor API 要求）。
+| 维度        | 实现                                            |
+| ----------- | ----------------------------------------------- |
+| 插件类型    | TUI 插件（sidebar_content 插槽）                |
+| 渲染方式    | SolidJS (@opentui/solid)                        |
+| 数据来源    | Z.AI / ZHIPU Monitor API（每平台 3 端点）       |
+| 凭证来源    | OpenCode auth.json / 环境变量                   |
+| HTTP 客户端 | `fetch()` + AbortController 10s 超时            |
+| 错误策略    | `Promise.allSettled` 优雅降级（部分失败也展示） |
+| 刷新策略    | 挂载首次获取 + 每 5 分钟轮询                    |
 
 ## 故障排查
 
-| 现象 | 可能原因 |
-|------|----------|
-| 面板显示空白 / 无数据 | 未认证，或 auth.json 路径未命中，或未设置环境变量 |
-| 数据部分缺失 | 某个 API 端点超时（10s），其余仍会展示 |
-| 语言切换无效 | 可设置环境变量 `GLM_VISTATUS_LANG=zh\|en` 强制语言（绕过自动检测） |
-| 数据不更新 | 重启 OpenCode，或使用 `/glm-refresh` 立即刷新 |
+| 现象                  | 可能原因                                                           |
+| --------------------- | ------------------------------------------------------------------ |
+| 面板显示空白 / 无数据 | 未认证，或 auth.json 路径未命中，或未设置环境变量                  |
+| 数据部分缺失          | 某个 API 端点超时（10s），其余仍会展示                             |
+| 语言切换无效          | 可设置环境变量 `GLM_VISTATUS_LANG=zh\|en` 强制语言（绕过自动检测） |
+| 数据不更新            | 重启 OpenCode，或使用 `/glm-refresh` 立即刷新                      |
 
 ## License
 

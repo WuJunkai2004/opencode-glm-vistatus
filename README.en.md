@@ -39,10 +39,7 @@ Press Enter to complete the installation and configuration.
 npx opencode-glm-vistatus
 ```
 
-The install script automatically writes to `tui.jsonc` in the cross-platform
-OpenCode config directory (and syncs to `opencode.jsonc` when present) to
-register the plugin. The plugin spec is the bare name `opencode-glm-vistatus`
-(no `@latest`).
+The install script automatically writes to `tui.jsonc` in the cross-platform OpenCode config directory (and syncs to `opencode.jsonc` when present) to register the plugin. The plugin spec is the bare name `opencode-glm-vistatus` (no `@latest`).
 
 ### Option 3: manual configuration
 
@@ -51,13 +48,13 @@ Add the plugin to `tui.jsonc` in your config directory:
 ```jsonc
 {
   "$schema": "https://opencode.ai/tui.json",
-  "plugin": ["opencode-glm-vistatus"]
+  "plugin": ["opencode-glm-vistatus"],
 }
 ```
 
-| OS | Config directory |
-|----|------------------|
-| Windows | `%APPDATA%\opencode\` |
+| OS            | Config directory      |
+| ------------- | --------------------- |
+| Windows       | `%APPDATA%\opencode\` |
 | macOS / Linux | `~/.config/opencode/` |
 
 ### Restart OpenCode
@@ -68,13 +65,12 @@ Enter any session to see the GLM quota panel in the sidebar.
 
 **1. Remove the plugin configuration**
 
-Delete `"opencode-glm-vistatus"` from the `plugin` array in `tui.jsonc`
-(and `opencode.jsonc`, if present):
+Delete `"opencode-glm-vistatus"` from the `plugin` array in `tui.jsonc` (and `opencode.jsonc`, if present):
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/tui.json",
-  "plugin": []   // remove the "opencode-glm-vistatus" entry
+  "plugin": [], // remove the "opencode-glm-vistatus" entry
 }
 ```
 
@@ -86,9 +82,7 @@ npm uninstall -g opencode-glm-vistatus
 
 **3. Clear the OpenCode plugin cache**
 
-Due to [OpenCode known issue #6774](https://github.com/anomalyco/opencode/issues/6774),
-plugins are cached locally; after removing the config it is recommended to
-clear the cache as well:
+Due to [OpenCode known issue #6774](https://github.com/anomalyco/opencode/issues/6774), plugins are cached locally; after removing the config it is recommended to clear the cache as well:
 
 ```powershell
 # Windows PowerShell
@@ -107,17 +101,16 @@ rm -rf ~/.cache/opencode/packages/opencode-glm-vistatus
 1. Authenticate your Z.AI / ZHIPU account via the `/connect` command, or
 2. Set the `ZAI_API_KEY` / `ZHIPU_API_KEY` environment variables
 
-Credential discovery priority: XDG `~/.local/share/opencode/auth.json` →
-Windows `%LOCALAPPDATA%\opencode\auth.json` → environment variables.
+Credential discovery priority: XDG `~/.local/share/opencode/auth.json` → Windows `%LOCALAPPDATA%\opencode\auth.json` → environment variables.
 
 ## Slash Commands
 
-| Command | Action |
-|---------|--------|
+| Command        | Action                               |
+| -------------- | ------------------------------------ |
 | `/glm-refresh` | Force-refresh quota data immediately |
-| `/glm-lang` | Switch between Chinese and English |
-| `/glm-section` | Toggle panel border visibility |
-| `/glm-config` | Show current configuration |
+| `/glm-lang`    | Switch between Chinese and English   |
+| `/glm-section` | Toggle panel border visibility       |
+| `/glm-config`  | Show current configuration           |
 
 Language and border preferences are persisted (plugin KV) and survive restarts.
 
@@ -140,13 +133,11 @@ MCP                     0/1,000
 
 Progress bar color rules:
 
-| Usage | Color | Meaning |
-|-------|-------|---------|
-| < 70% | Green | Plenty remaining |
+| Usage  | Color  | Meaning           |
+| ------ | ------ | ----------------- |
+| < 70%  | Green  | Plenty remaining  |
 | 70-90% | Orange | Approaching limit |
-| >= 90% | Red | Near exhaustion |
-
-> Note: color logic is the inverse of cache-style plugins — higher usage = redder.
+| >= 90% | Red    | Near exhaustion   |
 
 ## Build
 
@@ -163,27 +154,24 @@ Build artifacts:
 
 ## Architecture
 
-| Aspect | Implementation |
-|--------|----------------|
-| Plugin type | TUI plugin (sidebar_content slot) |
-| Rendering | SolidJS (@opentui/solid) |
-| Data source | Z.AI / ZHIPU Monitor API (3 endpoints per platform) |
-| Credentials | OpenCode auth.json / environment variables |
-| HTTP client | `fetch()` + AbortController 10s timeout |
-| Error strategy | `Promise.allSettled` graceful degradation (shows partial data) |
-| Refresh strategy | first fetch on mount + poll every 5 minutes |
-
-> The auth header uses `Authorization: <token>` with **no** `Bearer` prefix
-> (required by the GLM Monitor API).
+| Aspect           | Implementation                                                 |
+| ---------------- | -------------------------------------------------------------- |
+| Plugin type      | TUI plugin (sidebar_content slot)                              |
+| Rendering        | SolidJS (@opentui/solid)                                       |
+| Data source      | Z.AI / ZHIPU Monitor API (3 endpoints per platform)            |
+| Credentials      | OpenCode auth.json / environment variables                     |
+| HTTP client      | `fetch()` + AbortController 10s timeout                        |
+| Error strategy   | `Promise.allSettled` graceful degradation (shows partial data) |
+| Refresh strategy | first fetch on mount + poll every 5 minutes                    |
 
 ## Troubleshooting
 
-| Symptom | Likely cause |
-|---------|--------------|
-| Panel blank / no data | Not authenticated, auth.json path not matched, or env vars unset |
-| Partial data missing | An API endpoint timed out (10s); the rest still renders |
+| Symptom                     | Likely cause                                                              |
+| --------------------------- | ------------------------------------------------------------------------- |
+| Panel blank / no data       | Not authenticated, auth.json path not matched, or env vars unset          |
+| Partial data missing        | An API endpoint timed out (10s); the rest still renders                   |
 | Language toggle not working | Set `GLM_VISTATUS_LANG=zh\|en` to force a language (bypasses auto-detect) |
-| Data not updating | Restart OpenCode, or run `/glm-refresh` to refresh now |
+| Data not updating           | Restart OpenCode, or run `/glm-refresh` to refresh now                    |
 
 ## License
 
