@@ -110,9 +110,19 @@ Credential discovery priority: XDG `~/.local/share/opencode/auth.json` → Windo
 | `/glm-refresh` | Force-refresh quota data immediately |
 | `/glm-lang`    | Switch between Chinese and English   |
 | `/glm-section` | Toggle panel border visibility       |
-| `/glm-config`  | Show current configuration           |
+| `/glm-config`      | Show current configuration           |
+| `/glm-mcp-install`  | Install GLM MCP servers              |
 
 Language and border preferences are persisted (plugin KV) and survive restarts.
+
+`/glm-mcp-install` offers an interactive picker for install scope (Local project / Global user-wide) and server selection, writing MCP config to the corresponding `opencode.json`. Available servers:
+
+| Server           | Type   | Description                                        |
+| ---------------- | ------ | -------------------------------------------------- |
+| github-read      | Remote | GitHub repo knowledge & code reading              |
+| glm-web-reader   | Remote | Web page content extraction & structured data      |
+| glm-web-search   | Remote | Web search & real-time information                 |
+| glm-vision       | Local  | Image analysis & video understanding (GLM-4.6V)    |
 
 ## Panel Layout
 

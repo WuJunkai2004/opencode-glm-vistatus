@@ -21,12 +21,12 @@ then `npm run version` regenerates `src/_version.ts` from it. `prepublishOnly`
 runs both automatically.
 
 - `release.yml` (manual `workflow_dispatch`): bumps per rule (`minor+1, patch=0`;
-  `minor>10` rolls over to `major+1`), commits, tags `vX.Y.Z`, creates a GitHub
+  `minor>=10` rolls over to `major+1`), commits, tags `vX.Y.Z`, creates a GitHub
   Release. That VERSION.txt commit then triggers `publish.yml`.
 - `publish.yml`: fires on any `VERSION.txt` change on `main` → syncs, builds,
-  `npm publish`. Requires the `NPM_TOKEN` repo secret.
+  `npm publish --provenance --access public`. Requires `NPM_TOKEN` secret.
 
-### Gotcha: `src/_version.ts` is generated & gitignored
+### `src/_version.ts` is generated & gitignored
 
 `build.tui.mjs` auto-creates it from `package.json` if missing; without it the
 bundle build fails. Never hand-edit or commit it.
@@ -38,16 +38,7 @@ bundle build fails. Never hand-edit or commit it.
 - `dist/server.js` + `*.d.ts` — emitted by `tsc` from `src/server.ts`.
 - esbuild `external`: `@opencode-ai/*`, `@opentui/*`, `solid-js` — these are
   **peer deps provided by the OpenCode host at runtime**, never bundled.
-
-## Architecture
-
-- **TUI plugin** (sidebar): `src/index.tsx` — SolidJS `GlmQuotaPanel` (625 lines).
-- **Server shell**: `src/server.ts` — empty `PluginModule` (compatibility only).
-- **API layer**: `src/api/` — `endpoints.ts` (3 endpoints/platform),
-  `platforms.ts` (Z.AI vs ZHIPU detection), `client.ts` (fetch + timeout).
-- **Utils**: `src/utils/` — `auth.ts`, `quota-parser.ts`, `time-window.ts`, `format.ts`.
-- **UI helpers**: `src/ui/` — `widgets.ts` (CJK width, progress bar),
-  `theme.ts` (Morandi palette), `i18n.ts` (zh/en).
+- JSX transform uses `@opentui/solid` as `jsxImportSource` (not `solid-js`).
 
 ## Key runtime quirks (do not regress)
 
@@ -65,15 +56,21 @@ bundle build fails. Never hand-edit or commit it.
 - **Debug env**: `GLM_VISTATUS_LANG=zh|en` forces the UI language (bypasses
   auto-detection) for testing i18n.
 
+## Slash commands (registered in `src/index.tsx`)
+
+| Command        | Action                               |
+| -------------- | ------------------------------------ |
+| `/glm-refresh` | Force-refresh quota data immediately |
+| `/glm-lang`    | Switch between Chinese and English   |
+| `/glm-section` | Toggle panel border visibility       |
+| `/glm-config`      | Show current configuration           |
+| `/glm-mcp-install`  | Install GLM MCP servers              |
+
+Language and border preferences are persisted via plugin KV and survive restarts.
+
 ## Install / registration
 
 `npx opencode-glm-vistatus` runs `install.mjs`, which writes the plugin spec
 into the cross-platform opencode config dir (`~/.config/opencode/tui.jsonc`, or
 `%APPDATA%/opencode/tui.jsonc` on Windows). Plugin spec is the bare string
 `"opencode-glm-vistatus"` (no `@latest`).
-
-## Reference Projects (not in this repo)
-
-Patterns adapted from upstream plugins — consult if behavior is unclear:
-- `opencode-glm-quota` — API endpoints, auth discovery, quota parsing.
-- `opencode-visual-cache` — TUI rendering, SolidJS, theme, CJK width, commands.
