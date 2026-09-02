@@ -9,6 +9,7 @@ npm install          # install deps (peer deps are host-provided, see below)
 npm run build        # tsc (emit + declarations) && esbuild bundle → dist/tui.js
 npm run typecheck    # tsc --noEmit
 npm run build:tui    # esbuild bundle only (skips tsc)
+npm run inspect      # live API debug: fetches real quota data & prints each step (needs creds)
 ```
 
 No test suite exists. Verify changes with `npm run typecheck && npm run build`.
@@ -47,7 +48,9 @@ bundle build fails. Never hand-edit or commit it.
 - **Credential discovery priority** (`src/utils/auth.ts`):
   1. `~/.local/share/opencode/auth.json` (XDG, cross-platform, preferred)
   2. `%LOCALAPPDATA%/opencode/auth.json` (Windows legacy fallback)
-  3. env `ZAI_API_KEY` / `ZHIPU_API_KEY`
+  3. env `ZAI_API_KEY` / `ZHIPU_API_KEY` (alias `ZHIPUAI_API_KEY`)
+- auth.json lookup only matches known provider IDs (`zhipuai-coding-plan`,
+  `zai-coding-plan`, `zai`, `zhipu`, …) — entries under other IDs are ignored.
 - `fetch()` + `AbortController` 10s timeout; `Promise.allSettled` so one failed
   endpoint doesn't blank the panel (graceful degradation).
 - 5-minute auto-refresh via `setInterval`; first fetch on mount.
@@ -70,7 +73,8 @@ Language and border preferences are persisted via plugin KV and survive restarts
 
 ## Install / registration
 
-`npx opencode-glm-vistatus` runs `install.mjs`, which writes the plugin spec
+`npx opencode-glm-vistatus` runs `install.mjs`, which merges the plugin spec
 into the cross-platform opencode config dir (`~/.config/opencode/tui.jsonc`, or
-`%APPDATA%/opencode/tui.jsonc` on Windows). Plugin spec is the bare string
+`%APPDATA%/opencode/tui.jsonc` on Windows) **and** `opencode.jsonc` in the same
+dir for forward compatibility. Plugin spec is the bare string
 `"opencode-glm-vistatus"` (no `@latest`).
