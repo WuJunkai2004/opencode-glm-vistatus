@@ -61,13 +61,13 @@ bundle build fails. Never hand-edit or commit it.
 
 ## Slash commands (registered in `src/index.tsx`)
 
-| Command        | Action                               |
-| -------------- | ------------------------------------ |
-| `/glm-refresh` | Force-refresh quota data immediately |
-| `/glm-lang`    | Switch between Chinese and English   |
-| `/glm-section` | Toggle panel border visibility       |
-| `/glm-config`      | Show current configuration           |
-| `/glm-mcp-install`  | Install GLM MCP servers              |
+| Command           | Action                                                          |
+| ----------------- | --------------------------------------------------------------- |
+| `/glm-refresh`    | Force-refresh quota data immediately                            |
+| `/glm-lang`       | Switch between Chinese and English                              |
+| `/glm-section`    | Toggle panel border visibility                                  |
+| `/glm-config`     | Show current configuration                                      |
+| `/glm-mcp-manage` | Install / uninstall GLM MCP servers (alias: `/glm-mcp-install`) |
 
 Language and border preferences are persisted via plugin KV and survive restarts.
 

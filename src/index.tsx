@@ -22,6 +22,7 @@ import { PLUGIN_VERSION } from "./_version";
 import { getCredentials } from "./utils/auth";
 import {
   installGlmMcp,
+  uninstallGlmMcp,
   GLM_MCP_SERVER_NAMES,
   type Scope,
 } from "./utils/mcp-servers";
@@ -624,48 +625,77 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
       },
     },
     {
-      title: "GLM: Install MCP Servers",
+      title: "GLM: Manage MCP Servers",
       value: "glm.mcp",
-      description: "Install GLM Coding Plan MCP servers",
-      slash: { name: "glm-mcp-install" },
+      description: "Install or uninstall GLM Coding Plan MCP servers",
+      slash: { name: "glm-mcp-manage", aliases: ["glm-mcp-install"] },
       onSelect: (dialog) => {
         const mi18n = getMcpTranslations(langZH());
-        const creds = getCredentials();
-        if (!creds) {
-          api.ui.toast({
-            variant: "error",
-            message: mi18n.noCred,
-          });
-          dialog?.clear();
-          return;
-        }
-
-        const { token, platform } = creds;
 
         const projectDir = api.state.path.directory || process.cwd() || ".";
 
-        // ── Step 1: scope ──
+        // ── Step 1: action (install / uninstall) ──
         dialog?.replace(() => (
           <api.ui.DialogSelect
-            title={mi18n.scopeTitle}
+            title={mi18n.actionTitle}
             options={[
               {
-                title: mi18n.local,
-                description: mi18n.localDesc,
-                value: "local" as Scope,
+                title: mi18n.actionInstall,
+                description: mi18n.actionInstallDesc,
+                value: "install" as const,
               },
               {
-                title: mi18n.global,
-                description: mi18n.globalDesc,
-                value: "global" as Scope,
+                title: mi18n.actionUninstall,
+                description: mi18n.actionUninstallDesc,
+                value: "uninstall" as const,
               },
             ]}
-            onSelect={(opt: { value: Scope }) => showServerPicker(opt.value)}
+            onSelect={(opt: { value: "install" | "uninstall" }) => {
+              if (opt.value === "uninstall") {
+                showScopePicker("uninstall");
+                return;
+              }
+              // Install needs credentials; uninstall works without them.
+              const creds = getCredentials();
+              if (!creds) {
+                api.ui.toast({
+                  variant: "error",
+                  message: mi18n.noCred,
+                });
+                dialog?.clear();
+                return;
+              }
+              showScopePicker("install");
+            }}
           />
         ));
 
-        // ── Step 2: server multi-select ──
-        function showServerPicker(scope: Scope) {
+        // ── Step 2: scope ──
+        function showScopePicker(mode: "install" | "uninstall") {
+          dialog?.replace(() => (
+            <api.ui.DialogSelect
+              title={mi18n.scopeTitle(mode)}
+              options={[
+                {
+                  title: mi18n.local,
+                  description: mi18n.localDesc,
+                  value: "local" as Scope,
+                },
+                {
+                  title: mi18n.global,
+                  description: mi18n.globalDesc,
+                  value: "global" as Scope,
+                },
+              ]}
+              onSelect={(opt: { value: Scope }) =>
+                showServerPicker(mode, opt.value)
+              }
+            />
+          ));
+        }
+
+        // ── Step 3: server multi-select ──
+        function showServerPicker(mode: "install" | "uninstall", scope: Scope) {
           let selected = new Set<string>(GLM_MCP_SERVER_NAMES);
 
           function render() {
@@ -675,7 +705,7 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
 
             dialog?.replace(() => (
               <api.ui.DialogSelect
-                title={mi18n.pickTitle}
+                title={mi18n.pickTitle(mode)}
                 placeholder={mi18n.pickHint}
                 options={[
                   ...GLM_MCP_SERVER_NAMES.map((name) => {
@@ -693,28 +723,51 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
                   {
                     title:
                       snap.size > 0
-                        ? mi18n.confirm(snap.size, scopeLabel)
+                        ? mi18n.confirm(mode, snap.size, scopeLabel)
                         : mi18n.noneSelected,
-                    value: "__install",
+                    value: "__confirm",
                     disabled: snap.size === 0,
                   },
                 ]}
                 onSelect={(opt: { value: string }) => {
-                  if (opt.value === "__install") {
-                    const result = installGlmMcp(
-                      token,
-                      platform,
-                      scope,
-                      projectDir,
-                      snap,
-                    );
-                    if (result.ok) {
+                  if (opt.value === "__confirm") {
+                    const result =
+                      mode === "uninstall"
+                        ? uninstallGlmMcp(scope, projectDir, snap)
+                        : (() => {
+                            const creds = getCredentials();
+                            if (!creds) return null;
+                            return installGlmMcp(
+                              creds.token,
+                              creds.platform,
+                              scope,
+                              projectDir,
+                              snap,
+                            );
+                          })();
+
+                    if (!result) {
+                      // Credentials vanished between step 1 and confirm.
+                      api.ui.toast({
+                        variant: "error",
+                        message: mi18n.noCred,
+                      });
+                    } else if (result.ok) {
+                      const changed =
+                        "removed" in result
+                          ? result.removed.length
+                          : result.added.length;
+                      const unchanged =
+                        "missing" in result
+                          ? result.missing.length
+                          : result.skipped.length;
                       api.ui.toast({
                         variant: "success",
-                        title: mi18n.okTitle,
+                        title: mi18n.okTitle(mode),
                         message: mi18n.okMsg(
-                          result.added.length,
-                          result.skipped.length,
+                          mode,
+                          changed,
+                          unchanged,
                           mi18n.scopeLabel(result.scope),
                           result.filePath,
                         ),
@@ -723,7 +776,7 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
                     } else {
                       api.ui.toast({
                         variant: "error",
-                        title: mi18n.failTitle,
+                        title: mi18n.failTitle(mode),
                         message: result.error ?? "Unknown error",
                         duration: 10000,
                       });

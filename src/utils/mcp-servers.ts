@@ -59,6 +59,15 @@ export interface InstallResult {
   error?: string;
 }
 
+export interface UninstallResult {
+  ok: boolean;
+  filePath: string;
+  scope: Scope;
+  removed: string[];
+  missing: string[];
+  error?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Server definitions
 // ---------------------------------------------------------------------------
@@ -231,4 +240,91 @@ export function installGlmMcp(
   }
 
   return { ok: true, filePath, scope, added, skipped };
+}
+
+/**
+ * Uninstall GLM MCP servers from an OpenCode config file.
+ *
+ * Reads the target config, deletes the selected GLM MCP entries, and writes
+ * back. The config file is only touched if at least one entry exists (or the
+ * file itself is absent), so uninstalling from a clean setup never creates
+ * stray files.
+ *
+ * @param scope      "local" (project) or "global" (user-wide)
+ * @param projectDir Working directory for local scope
+ * @param servers    Optional subset of server names; omit for all four
+ * @returns          Uninstall result with removed/missing server names
+ */
+export function uninstallGlmMcp(
+  scope: Scope,
+  projectDir: string,
+  servers?: ReadonlySet<string>,
+): UninstallResult {
+  const filePath = resolveConfigFile(scope, projectDir);
+
+  if (!fs.existsSync(filePath)) {
+    return {
+      ok: true,
+      filePath,
+      scope,
+      removed: [],
+      missing: [...GLM_MCP_SERVER_NAMES],
+    };
+  }
+
+  let config: RawConfig;
+  try {
+    config = readJSONC(filePath);
+  } catch (e) {
+    return {
+      ok: false,
+      filePath,
+      scope,
+      removed: [],
+      missing: [],
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+
+  const targets = servers ?? new Set<string>(GLM_MCP_SERVER_NAMES);
+  const removed: string[] = [];
+  const missing: string[] = [];
+
+  for (const name of GLM_MCP_SERVER_NAMES) {
+    if (!targets.has(name)) continue;
+    if (config.mcp && name in config.mcp) {
+      delete config.mcp[name];
+      removed.push(name);
+    } else {
+      missing.push(name);
+    }
+  }
+
+  if (removed.length === 0) {
+    return { ok: true, filePath, scope, removed, missing };
+  }
+
+  // Drop an empty `mcp` object so we don't leave `"mcp": {}` behind.
+  if (
+    config.mcp &&
+    typeof config.mcp === "object" &&
+    Object.keys(config.mcp).length === 0
+  ) {
+    delete config.mcp;
+  }
+
+  try {
+    writeJSON(filePath, config);
+  } catch (e) {
+    return {
+      ok: false,
+      filePath,
+      scope,
+      removed: [],
+      missing: [],
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+
+  return { ok: true, filePath, scope, removed, missing };
 }
