@@ -16,7 +16,7 @@ English | [简体中文](./README.md)
 - Account plan tier (Pro / Lite, etc.)
 - Platform info (Z.AI / ZHIPU)
 - Last refresh time + next refresh estimate
-- Auto-refresh every 5 minutes
+- Auto-refresh every 5 minutes (customizable, 1–1440 min)
 - Bilingual: Chinese / English
 - Morandi-style theme adaptation
 - Progress bar color shifts with usage (green → orange → red)
@@ -110,10 +110,12 @@ Credential discovery priority: XDG `~/.local/share/opencode/auth.json` → Windo
 | `/glm-refresh`    | Force-refresh quota data immediately                           |
 | `/glm-lang`       | Switch between Chinese and English                             |
 | `/glm-section`    | Toggle panel border visibility                                 |
-| `/glm-config`     | Show current configuration                                     |
+| `/glm-config`     | Plugin settings: language / border / refresh interval        |
 | `/glm-mcp-manage` | Install / uninstall GLM MCP servers (alias `/glm-mcp-install`) |
 
-Language and border preferences are persisted (plugin KV) and survive restarts.
+Language, border and refresh-interval preferences are persisted (plugin KV) and survive restarts.
+
+`/glm-config` opens an interactive settings menu: display language, panel border, refresh interval. The refresh interval offers presets (1 / 2 / 5 / 10 / 30 / 60 minutes) plus custom input (1–1440 minutes, invalid input rejected); changes take effect immediately with the timer rescheduled.
 
 `/glm-mcp-manage` (alias `/glm-mcp-install`) offers interactive pickers for the action (install / uninstall), scope (Local project / Global user-wide) and server selection, writing MCP config to the corresponding `opencode.json` or removing it. Available servers:
 
@@ -172,7 +174,7 @@ Build artifacts:
 | Credentials      | OpenCode auth.json / environment variables                     |
 | HTTP client      | `fetch()` + AbortController 10s timeout                        |
 | Error strategy   | `Promise.allSettled` graceful degradation (shows partial data) |
-| Refresh strategy | first fetch on mount + poll every 5 minutes                    |
+| Refresh strategy | first fetch on mount + timed polling (default 5 min, customizable) |
 
 ## Troubleshooting
 

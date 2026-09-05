@@ -226,3 +226,89 @@ const EN_MCP: McpI18n = {
 export function getMcpTranslations(langZH: boolean): McpI18n {
   return langZH ? ZH_MCP : EN_MCP;
 }
+
+// ---------------------------------------------------------------------------
+// Settings menu translations (/glm-config)
+// ---------------------------------------------------------------------------
+
+export interface SettingsI18n {
+  menuTitle: string;
+  menuLang: string;
+  menuBorder: string;
+  menuInterval: (cur: string) => string;
+  menuDone: string;
+  intervalTitle: string;
+  intervalPresets: { label: string; minutes: number }[];
+  intervalCustom: string;
+  intervalCustomTitle: string;
+  intervalCustomPlaceholder: string;
+  intervalInvalid: (min: number, max: number) => string;
+  intervalSaved: (label: string) => string;
+  on: string;
+  off: string;
+  minutes: (n: number) => string;
+  cancel: string;
+}
+
+export function formatIntervalLabel(minutes: number): string {
+  if (minutes % 60 === 0) return `${minutes / 60}h`;
+  return `${minutes}m`;
+}
+
+const ZH_SETTINGS: SettingsI18n = {
+  menuTitle: "GLM 额度设置",
+  menuLang: "显示语言",
+  menuBorder: "面板边框",
+  menuInterval: (cur) => `刷新间隔  ·  当前 ${cur}`,
+  menuDone: "完成",
+  intervalTitle: "选择刷新间隔",
+  intervalPresets: [
+    { label: "1 分钟", minutes: 1 },
+    { label: "2 分钟", minutes: 2 },
+    { label: "5 分钟（默认）", minutes: 5 },
+    { label: "10 分钟", minutes: 10 },
+    { label: "30 分钟", minutes: 30 },
+    { label: "1 小时", minutes: 60 },
+  ],
+  intervalCustom: "自定义...",
+  intervalCustomTitle: "自定义刷新间隔（分钟，1-1440）",
+  intervalCustomPlaceholder: "例如：15",
+  intervalInvalid: (min, max) =>
+    `无效输入：请输入 ${min} 到 ${max} 之间的整数分钟数`,
+  intervalSaved: (label) => `刷新间隔已设为 ${label}`,
+  on: "开",
+  off: "关",
+  minutes: (n) => `${n} 分钟`,
+  cancel: "取消",
+};
+
+const EN_SETTINGS: SettingsI18n = {
+  menuTitle: "GLM Quota Settings",
+  menuLang: "Display Language",
+  menuBorder: "Panel Border",
+  menuInterval: (cur) => `Refresh Interval  ·  current ${cur}`,
+  menuDone: "Done",
+  intervalTitle: "Select Refresh Interval",
+  intervalPresets: [
+    { label: "1 minute", minutes: 1 },
+    { label: "2 minutes", minutes: 2 },
+    { label: "5 minutes (default)", minutes: 5 },
+    { label: "10 minutes", minutes: 10 },
+    { label: "30 minutes", minutes: 30 },
+    { label: "1 hour", minutes: 60 },
+  ],
+  intervalCustom: "Custom...",
+  intervalCustomTitle: "Custom Refresh Interval (minutes, 1-1440)",
+  intervalCustomPlaceholder: "e.g. 15",
+  intervalInvalid: (min, max) =>
+    `Invalid input: enter an integer between ${min} and ${max} minutes`,
+  intervalSaved: (label) => `Refresh interval set to ${label}`,
+  on: "ON",
+  off: "OFF",
+  minutes: (n) => `${n} minute${n === 1 ? "" : "s"}`,
+  cancel: "Cancel",
+};
+
+export function getSettingsTranslations(langZH: boolean): SettingsI18n {
+  return langZH ? ZH_SETTINGS : EN_SETTINGS;
+}

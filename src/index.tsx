@@ -46,6 +46,8 @@ import {
 import {
   getTranslations,
   getMcpTranslations,
+  getSettingsTranslations,
+  formatIntervalLabel,
   type Translations,
 } from "./ui/i18n";
 
@@ -53,7 +55,9 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_REFRESH_INTERVAL_MIN = 5; // minutes
+const MIN_REFRESH_INTERVAL_MIN = 1;
+const MAX_REFRESH_INTERVAL_MIN = 1440; // 24h
 const MIN_PANEL_WIDTH = 20;
 const DEFAULT_PANEL_WIDTH = 30;
 const KV = "glm_quota_panel";
@@ -85,6 +89,8 @@ interface PanelSignals {
   setLangZH: (v: boolean) => void;
   borderVisible: () => boolean;
   setBorderVisible: (v: boolean) => void;
+  refreshIntervalMin: () => number;
+  setRefreshIntervalMin: (v: number) => void;
   forceRefresh: () => number;
   setForceRefresh: (v: number) => void;
 }
@@ -164,13 +170,17 @@ function GlmQuotaPanel(props: {
 
     // First fetch
     refresh();
-
-    // Auto-refresh every 5 minutes
-    refreshTimer = setInterval(refresh, REFRESH_INTERVAL);
   });
 
   onCleanup(() => {
     if (refreshTimer) clearInterval(refreshTimer);
+  });
+
+  // ── Auto-refresh timer; rescheduled when the interval changes ──
+  createEffect(() => {
+    const minutes = props.signals.refreshIntervalMin();
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(refresh, minutes * 60 * 1000);
   });
 
   // ── React to manual force-refresh signal ──
@@ -493,6 +503,9 @@ function createSidebarSlot(
 const tui: TuiPlugin = async (api: TuiPluginApi) => {
   const [langZH, setLangZH] = createSignal(LANG_ZH);
   const [borderVisible, setBorderVisible] = createSignal(true);
+  const [refreshIntervalMin, setRefreshIntervalMin] = createSignal(
+    DEFAULT_REFRESH_INTERVAL_MIN,
+  );
   const [forceRefresh, setForceRefresh] = createSignal(0);
 
   const signals: PanelSignals = {
@@ -500,6 +513,8 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
     setLangZH,
     borderVisible,
     setBorderVisible,
+    refreshIntervalMin,
+    setRefreshIntervalMin,
     forceRefresh,
     setForceRefresh,
   };
@@ -511,6 +526,15 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
       if (savedLang === "zh" || savedLang === "en")
         setLangZH(savedLang === "zh");
       setBorderVisible(api.kv.get<boolean>(`${KV}.border`, true) !== false);
+      const savedInterval = api.kv.get<number>(`${KV}.interval`);
+      if (
+        typeof savedInterval === "number" &&
+        Number.isFinite(savedInterval) &&
+        savedInterval >= MIN_REFRESH_INTERVAL_MIN &&
+        savedInterval <= MAX_REFRESH_INTERVAL_MIN
+      ) {
+        setRefreshIntervalMin(Math.round(savedInterval));
+      }
     } catch {}
   };
 
@@ -610,18 +634,157 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
       },
     },
     {
-      title: "GLM: Show Config",
+      title: "GLM: Settings",
       value: "glm.config",
-      description: "Display the current plugin configuration",
+      description:
+        "Open plugin settings (language / border / refresh interval)",
       slash: { name: "glm-config" },
       onSelect: (dialog) => {
-        const border = Boolean(api.kv.get(`${KV}.border`, true));
-        api.ui.toast({
-          title: "GLM Quota Config",
-          message: `Lang: ${langZH() ? "中文" : "English"}  |  Border: ${border ? "ON" : "OFF"}`,
-          duration: 8000,
-        });
-        dialog?.clear();
+        function showMenu() {
+          const si18n = getSettingsTranslations(langZH());
+          const border = Boolean(api.kv.get(`${KV}.border`, true));
+          dialog?.replace(() => (
+            <api.ui.DialogSelect
+              title={si18n.menuTitle}
+              options={[
+                {
+                  title: `${si18n.menuLang}  [${langZH() ? "中文" : "English"}]`,
+                  value: "lang",
+                },
+                {
+                  title: `${si18n.menuBorder}  [${border ? si18n.on : si18n.off}]`,
+                  value: "border",
+                },
+                {
+                  title: si18n.menuInterval(
+                    formatIntervalLabel(signals.refreshIntervalMin()),
+                  ),
+                  value: "interval",
+                },
+                { title: si18n.menuDone, value: "__done" },
+              ]}
+              onSelect={(opt: { value: string }) => {
+                if (opt.value === "lang") showLangPicker();
+                else if (opt.value === "border") showBorderPicker();
+                else if (opt.value === "interval") showIntervalPicker();
+                else dialog?.clear();
+              }}
+            />
+          ));
+        }
+
+        function showLangPicker() {
+          const cur = langZH();
+          const si18n = getSettingsTranslations(cur);
+          dialog?.replace(() => (
+            <api.ui.DialogSelect
+              title={si18n.menuLang}
+              options={[
+                { title: `中文    ${cur ? "\u2713" : ""}`, value: "zh" },
+                { title: `English ${cur ? "" : "\u2713"}`, value: "en" },
+              ]}
+              onSelect={(opt: { value: string }) => {
+                const zh = opt.value === "zh";
+                api.kv.set(`${KV}.lang`, opt.value);
+                setLangZH(zh);
+                showMenu();
+              }}
+            />
+          ));
+        }
+
+        function showBorderPicker() {
+          const si18n = getSettingsTranslations(langZH());
+          const border = Boolean(api.kv.get(`${KV}.border`, true));
+          dialog?.replace(() => (
+            <api.ui.DialogSelect
+              title={si18n.menuBorder}
+              options={[
+                {
+                  title: `${si18n.on}  ${!border ? "\u2713" : ""}`,
+                  value: "on",
+                },
+                {
+                  title: `${si18n.off}  ${border ? "\u2713" : ""}`,
+                  value: "off",
+                },
+              ]}
+              onSelect={(opt: { value: string }) => {
+                const on = opt.value === "on";
+                api.kv.set(`${KV}.border`, on);
+                signals.setBorderVisible(on);
+                showMenu();
+              }}
+            />
+          ));
+        }
+
+        function showIntervalPicker() {
+          const si18n = getSettingsTranslations(langZH());
+          const cur = signals.refreshIntervalMin();
+          dialog?.replace(() => (
+            <api.ui.DialogSelect
+              title={si18n.intervalTitle}
+              options={[
+                ...si18n.intervalPresets.map((p) => ({
+                  title: `${p.label}${p.minutes === cur ? "  \u2713" : ""}`,
+                  value: String(p.minutes),
+                })),
+                { title: si18n.intervalCustom, value: "__custom" },
+              ]}
+              onSelect={(opt: { value: string }) => {
+                if (opt.value === "__custom") {
+                  showCustomInterval();
+                  return;
+                }
+                applyInterval(Number(opt.value));
+              }}
+            />
+          ));
+        }
+
+        function showCustomInterval() {
+          const si18n = getSettingsTranslations(langZH());
+          dialog?.replace(() => (
+            <api.ui.DialogPrompt
+              title={si18n.intervalCustomTitle}
+              placeholder={si18n.intervalCustomPlaceholder}
+              onConfirm={(raw) => {
+                const n = Math.round(Number(raw));
+                if (
+                  raw.trim() === "" ||
+                  !Number.isFinite(n) ||
+                  n < MIN_REFRESH_INTERVAL_MIN ||
+                  n > MAX_REFRESH_INTERVAL_MIN
+                ) {
+                  api.ui.toast({
+                    variant: "error",
+                    message: si18n.intervalInvalid(
+                      MIN_REFRESH_INTERVAL_MIN,
+                      MAX_REFRESH_INTERVAL_MIN,
+                    ),
+                  });
+                  return;
+                }
+                applyInterval(n);
+              }}
+              onCancel={showIntervalPicker}
+            />
+          ));
+        }
+
+        function applyInterval(minutes: number) {
+          const si18n = getSettingsTranslations(langZH());
+          api.kv.set(`${KV}.interval`, minutes);
+          signals.setRefreshIntervalMin(minutes);
+          api.ui.toast({
+            variant: "success",
+            message: si18n.intervalSaved(si18n.minutes(minutes)),
+          });
+          showMenu();
+        }
+
+        showMenu();
       },
     },
     {

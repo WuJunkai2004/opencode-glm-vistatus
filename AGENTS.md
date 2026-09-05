@@ -53,7 +53,7 @@ bundle build fails. Never hand-edit or commit it.
   `zai-coding-plan`, `zai`, `zhipu`, …) — entries under other IDs are ignored.
 - `fetch()` + `AbortController` 10s timeout; `Promise.allSettled` so one failed
   endpoint doesn't blank the panel (graceful degradation).
-- 5-minute auto-refresh via `setInterval`; first fetch on mount.
+- Auto-refresh via `setInterval` (default 5 min, configurable via `/glm-config`); first fetch on mount.
 - Quota color logic is **inverted** from typical cache plugins: higher usage =
   redder (`<70%` green, `70-90%` orange, `>=90%` red).
 - **Debug env**: `GLM_VISTATUS_LANG=zh|en` forces the UI language (bypasses
@@ -66,10 +66,13 @@ bundle build fails. Never hand-edit or commit it.
 | `/glm-refresh`    | Force-refresh quota data immediately                            |
 | `/glm-lang`       | Switch between Chinese and English                              |
 | `/glm-section`    | Toggle panel border visibility                                  |
-| `/glm-config`     | Show current configuration                                      |
+| `/glm-config`     | Interactive settings: language / border / refresh interval       |
 | `/glm-mcp-manage` | Install / uninstall GLM MCP servers (alias: `/glm-mcp-install`) |
 
-Language and border preferences are persisted via plugin KV and survive restarts.
+Language, border and refresh-interval preferences are persisted via plugin KV
+and survive restarts. Refresh interval: presets 1/2/5/10/30/60 min + custom
+(1–1440 min, validated in `/glm-config`), default 5 min, timer reschedules
+reactively when changed.
 
 ## Install / registration
 
