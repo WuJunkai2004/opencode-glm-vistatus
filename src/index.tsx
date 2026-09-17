@@ -23,6 +23,7 @@ import { getCredentials } from "./utils/auth";
 import {
   installGlmMcp,
   uninstallGlmMcp,
+  getInstalledGlmMcp,
   GLM_MCP_SERVER_NAMES,
   type Scope,
 } from "./utils/mcp-servers";
@@ -739,78 +740,107 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
 
         const projectDir = api.state.path.directory || process.cwd() || ".";
 
-        // ── Step 1: action (install / uninstall) ──
+        // ── Step 1: scope ──
         dialog?.replace(() => (
           <api.ui.DialogSelect
-            title={mi18n.actionTitle}
+            title={mi18n.scopeTitle}
             options={[
               {
-                title: mi18n.actionInstall,
-                description: mi18n.actionInstallDesc,
-                value: "install" as const,
+                title: mi18n.local,
+                description: mi18n.localDesc,
+                value: "local" as Scope,
               },
               {
-                title: mi18n.actionUninstall,
-                description: mi18n.actionUninstallDesc,
-                value: "uninstall" as const,
+                title: mi18n.global,
+                description: mi18n.globalDesc,
+                value: "global" as Scope,
               },
             ]}
-            onSelect={(opt: { value: "install" | "uninstall" }) => {
-              if (opt.value === "uninstall") {
-                showScopePicker("uninstall");
-                return;
-              }
-              // Install needs credentials; uninstall works without them.
-              const creds = getCredentials();
-              if (!creds) {
-                api.ui.toast({
-                  variant: "error",
-                  message: mi18n.noCred,
-                });
-                dialog?.clear();
-                return;
-              }
-              showScopePicker("install");
-            }}
+            onSelect={(opt: { value: Scope }) => showServerPicker(opt.value)}
           />
         ));
 
-        // ── Step 2: scope ──
-        function showScopePicker(mode: "install" | "uninstall") {
-          dialog?.replace(() => (
-            <api.ui.DialogSelect
-              title={mi18n.scopeTitle(mode)}
-              options={[
-                {
-                  title: mi18n.local,
-                  description: mi18n.localDesc,
-                  value: "local" as Scope,
-                },
-                {
-                  title: mi18n.global,
-                  description: mi18n.globalDesc,
-                  value: "global" as Scope,
-                },
-              ]}
-              onSelect={(opt: { value: Scope }) =>
-                showServerPicker(mode, opt.value)
-              }
-            />
-          ));
-        }
+        // ── Step 2: checkbox list seeded from the scope's live config ──
+        // Checked = installed, unchecked = not installed. Only servers whose
+        // toggle differs from the entry state are installed / uninstalled.
+        function showServerPicker(scope: Scope) {
+          const mi18nScope = mi18n.scopeLabel(scope);
+          const initial = getInstalledGlmMcp(scope, projectDir);
+          let selected = new Set<string>(initial);
 
-        // ── Step 3: server multi-select ──
-        function showServerPicker(mode: "install" | "uninstall", scope: Scope) {
-          let selected = new Set<string>(GLM_MCP_SERVER_NAMES);
+          const diff = (snap: ReadonlySet<string>) => ({
+            toInstall: GLM_MCP_SERVER_NAMES.filter(
+              (n) => snap.has(n) && !initial.has(n),
+            ),
+            toUninstall: GLM_MCP_SERVER_NAMES.filter(
+              (n) => !snap.has(n) && initial.has(n),
+            ),
+          });
+
+          function applyChanges(snap: ReadonlySet<string>) {
+            const { toInstall, toUninstall } = diff(snap);
+
+            if (toInstall.length === 0 && toUninstall.length === 0) {
+              api.ui.toast({ message: mi18n.noChange });
+              return;
+            }
+
+            const creds = toInstall.length > 0 ? getCredentials() : null;
+            if (toInstall.length > 0 && !creds) {
+              api.ui.toast({ variant: "error", message: mi18n.noCred });
+              return;
+            }
+
+            const errors: string[] = [];
+            let filePath = "";
+            let installed = 0;
+            let removed = 0;
+
+            if (creds && toInstall.length > 0) {
+              const r = installGlmMcp(
+                creds.token,
+                creds.platform,
+                scope,
+                projectDir,
+                new Set(toInstall),
+              );
+              filePath = r.filePath;
+              if (r.ok) installed = r.added.length;
+              else errors.push(r.error ?? "Unknown error");
+            }
+
+            if (toUninstall.length > 0) {
+              const r = uninstallGlmMcp(scope, projectDir, new Set(toUninstall));
+              filePath = r.filePath;
+              if (r.ok) removed = r.removed.length;
+              else errors.push(r.error ?? "Unknown error");
+            }
+
+            if (errors.length > 0) {
+              api.ui.toast({
+                variant: "error",
+                title: mi18n.failTitle,
+                message: errors.join(" · "),
+                duration: 10000,
+              });
+            } else {
+              api.ui.toast({
+                variant: "success",
+                title: mi18n.okTitle,
+                message: mi18n.okMsg(installed, removed, mi18nScope, filePath),
+                duration: 10000,
+              });
+            }
+          }
 
           function render() {
             const snap = new Set(selected);
             const allOn = snap.size === GLM_MCP_SERVER_NAMES.length;
-            const scopeLabel = mi18n.scopeLabel(scope);
+            const { toInstall, toUninstall } = diff(snap);
 
             dialog?.replace(() => (
               <api.ui.DialogSelect
-                title={mi18n.pickTitle(mode)}
+                title={mi18n.pickTitle(mi18nScope)}
                 placeholder={mi18n.pickHint}
                 options={[
                   ...GLM_MCP_SERVER_NAMES.map((name) => {
@@ -826,66 +856,17 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
                     value: "__bulk",
                   },
                   {
-                    title:
-                      snap.size > 0
-                        ? mi18n.confirm(mode, snap.size, scopeLabel)
-                        : mi18n.noneSelected,
+                    title: mi18n.confirm(
+                      toInstall.length,
+                      toUninstall.length,
+                      mi18nScope,
+                    ),
                     value: "__confirm",
-                    disabled: snap.size === 0,
                   },
                 ]}
                 onSelect={(opt: { value: string }) => {
                   if (opt.value === "__confirm") {
-                    const result =
-                      mode === "uninstall"
-                        ? uninstallGlmMcp(scope, projectDir, snap)
-                        : (() => {
-                            const creds = getCredentials();
-                            if (!creds) return null;
-                            return installGlmMcp(
-                              creds.token,
-                              creds.platform,
-                              scope,
-                              projectDir,
-                              snap,
-                            );
-                          })();
-
-                    if (!result) {
-                      // Credentials vanished between step 1 and confirm.
-                      api.ui.toast({
-                        variant: "error",
-                        message: mi18n.noCred,
-                      });
-                    } else if (result.ok) {
-                      const changed =
-                        "removed" in result
-                          ? result.removed.length
-                          : result.added.length;
-                      const unchanged =
-                        "missing" in result
-                          ? result.missing.length
-                          : result.skipped.length;
-                      api.ui.toast({
-                        variant: "success",
-                        title: mi18n.okTitle(mode),
-                        message: mi18n.okMsg(
-                          mode,
-                          changed,
-                          unchanged,
-                          mi18n.scopeLabel(result.scope),
-                          result.filePath,
-                        ),
-                        duration: 10000,
-                      });
-                    } else {
-                      api.ui.toast({
-                        variant: "error",
-                        title: mi18n.failTitle(mode),
-                        message: result.error ?? "Unknown error",
-                        duration: 10000,
-                      });
-                    }
+                    applyChanges(snap);
                     dialog?.clear();
                   } else if (opt.value === "__bulk") {
                     selected = allOn

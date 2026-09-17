@@ -82,57 +82,38 @@ export interface McpServerMeta {
 }
 
 export interface McpI18n {
-  actionTitle: string;
-  actionInstall: string;
-  actionInstallDesc: string;
-  actionUninstall: string;
-  actionUninstallDesc: string;
-  scopeTitle: (mode: "install" | "uninstall") => string;
+  scopeTitle: string;
   local: string;
   localDesc: string;
   global: string;
   globalDesc: string;
-  pickTitle: (mode: "install" | "uninstall") => string;
+  pickTitle: (scopeLabel: string) => string;
   pickHint: string;
   servers: Record<string, McpServerMeta>;
   selectAll: string;
   deselectAll: string;
-  confirm: (
-    mode: "install" | "uninstall",
-    n: number,
-    scopeLabel: string,
-  ) => string;
-  noneSelected: string;
-  okTitle: (mode: "install" | "uninstall") => string;
+  confirm: (install: number, uninstall: number, scopeLabel: string) => string;
+  noChange: string;
+  okTitle: string;
   okMsg: (
-    mode: "install" | "uninstall",
-    changed: number,
-    unchanged: number,
+    installed: number,
+    removed: number,
     scopeLabel: string,
     file: string,
   ) => string;
-  failTitle: (mode: "install" | "uninstall") => string;
+  failTitle: string;
   noCred: string;
   scopeLabel: (scope: McpScope) => string;
 }
 
 const ZH_MCP: McpI18n = {
-  actionTitle: "GLM MCP 管理",
-  actionInstall: "安装  ·  添加/更新 MCP 服务器",
-  actionInstallDesc: "将选中的 GLM MCP 服务器写入配置",
-  actionUninstall: "卸载  ·  移除已安装的 MCP 服务器",
-  actionUninstallDesc: "将选中的 GLM MCP 服务器从配置中删除",
-  scopeTitle: (mode) =>
-    mode === "uninstall" ? "GLM MCP 卸载范围" : "GLM MCP 安装范围",
+  scopeTitle: "GLM MCP 管理范围",
   local: "Local  ·  当前项目",
-  localDesc: "写入项目根目录 opencode.json",
+  localDesc: "项目根目录 opencode.json / opencode.jsonc",
   global: "Global  ·  全局用户",
-  globalDesc: "写入 ~/.config/opencode/opencode.json",
-  pickTitle: (mode) =>
-    mode === "uninstall"
-      ? "选择要卸载的 GLM MCP 服务器"
-      : "选择要安装的 GLM MCP 服务器",
-  pickHint: "回车切换选中状态，选择完成后点击确认",
+  globalDesc: "~/.config/opencode/opencode.json / opencode.jsonc",
+  pickTitle: (scopeLabel) => `GLM MCP 服务器 · ${scopeLabel}`,
+  pickHint: "勾选 = 安装，取消勾选 = 卸载；仅应用与进入时不同的条目",
   servers: {
     "github-read": {
       label: "开源仓库 MCP",
@@ -150,40 +131,25 @@ const ZH_MCP: McpI18n = {
   },
   selectAll: "全选",
   deselectAll: "全不选",
-  confirm: (mode, n, scopeLabel) =>
-    mode === "uninstall"
-      ? `▸ 卸载 ${n} 个选中  →  ${scopeLabel}`
-      : `▸ 安装 ${n} 个选中  →  ${scopeLabel}`,
-  noneSelected: "（请至少选择一个）",
-  okTitle: (mode) =>
-    mode === "uninstall" ? "GLM MCP 卸载完成" : "GLM MCP 安装完成",
-  okMsg: (mode, changed, unchanged, scopeLabel, file) =>
-    mode === "uninstall"
-      ? `${changed} 已移除 · ${unchanged} 未安装 → ${scopeLabel}  (${file})`
-      : `${changed} 新增 · ${unchanged} 已存在 → ${scopeLabel}  (${file})`,
-  failTitle: (mode) =>
-    mode === "uninstall" ? "GLM MCP 卸载失败" : "GLM MCP 安装失败",
+  confirm: (install, uninstall, scopeLabel) =>
+    `▸ 应用变更：安装 ${install} · 卸载 ${uninstall}  →  ${scopeLabel}`,
+  noChange: "配置无变化",
+  okTitle: "GLM MCP 配置已更新",
+  okMsg: (installed, removed, scopeLabel, file) =>
+    `已安装 ${installed} · 已卸载 ${removed} → ${scopeLabel}  (${file})`,
+  failTitle: "GLM MCP 配置更新失败",
   noCred: "未找到 GLM 凭证，请先运行 /connect 认证",
   scopeLabel: (scope) => (scope === "global" ? "全局" : "项目"),
 };
 
 const EN_MCP: McpI18n = {
-  actionTitle: "GLM MCP Manage",
-  actionInstall: "Install  ·  add / update MCP servers",
-  actionInstallDesc: "Write selected GLM MCP servers into config",
-  actionUninstall: "Uninstall  ·  remove installed MCP servers",
-  actionUninstallDesc: "Delete selected GLM MCP servers from config",
-  scopeTitle: (mode) =>
-    mode === "uninstall" ? "GLM MCP Uninstall Scope" : "GLM MCP Install Scope",
+  scopeTitle: "GLM MCP Manage Scope",
   local: "Local  ·  current project",
-  localDesc: "Write to project root opencode.json",
+  localDesc: "Project root opencode.json / opencode.jsonc",
   global: "Global  ·  user-wide",
-  globalDesc: "Write to ~/.config/opencode/opencode.json",
-  pickTitle: (mode) =>
-    mode === "uninstall"
-      ? "Select GLM MCP Servers to Uninstall"
-      : "Select GLM MCP Servers to Install",
-  pickHint: "Press Enter to toggle, then confirm",
+  globalDesc: "~/.config/opencode/opencode.json / opencode.jsonc",
+  pickTitle: (scopeLabel) => `GLM MCP Servers · ${scopeLabel}`,
+  pickHint: "Checked = install, unchecked = uninstall; only diffs apply",
   servers: {
     "github-read": {
       label: "Repo Knowledge",
@@ -204,21 +170,13 @@ const EN_MCP: McpI18n = {
   },
   selectAll: "Select All",
   deselectAll: "Deselect All",
-  confirm: (mode, n, scopeLabel) =>
-    mode === "uninstall"
-      ? `▸ Uninstall ${n} selected  →  ${scopeLabel}`
-      : `▸ Install ${n} selected  →  ${scopeLabel}`,
-  noneSelected: "(select at least one)",
-  okTitle: (mode) =>
-    mode === "uninstall" ? "GLM MCP Uninstalled" : "GLM MCP Installed",
-  okMsg: (mode, changed, unchanged, scopeLabel, file) =>
-    mode === "uninstall"
-      ? `${changed} removed · ${unchanged} not found → ${scopeLabel}  (${file})`
-      : `${changed} added · ${unchanged} existing → ${scopeLabel}  (${file})`,
-  failTitle: (mode) =>
-    mode === "uninstall"
-      ? "GLM MCP Uninstall Failed"
-      : "GLM MCP Install Failed",
+  confirm: (install, uninstall, scopeLabel) =>
+    `▸ Apply: install ${install} · uninstall ${uninstall}  →  ${scopeLabel}`,
+  noChange: "No changes",
+  okTitle: "GLM MCP Config Updated",
+  okMsg: (installed, removed, scopeLabel, file) =>
+    `${installed} installed · ${removed} removed → ${scopeLabel}  (${file})`,
+  failTitle: "GLM MCP Config Update Failed",
   noCred: "No GLM credentials found. Run /connect to authenticate",
   scopeLabel: (scope) => scope,
 };

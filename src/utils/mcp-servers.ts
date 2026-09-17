@@ -136,24 +136,35 @@ function globalConfigDir(): string {
   return path.join(os.homedir(), ".config", "opencode");
 }
 
+/** Config files OpenCode accepts, in load order (`opencode.jsonc` wins). */
 const CONFIG_FILENAMES = ["opencode.json", "opencode.jsonc"] as const;
 
+/** Absolute paths of the config files that currently exist for the scope. */
+function existingConfigFiles(scope: Scope, projectDir: string): string[] {
+  const dir = scope === "global" ? globalConfigDir() : projectDir;
+  return CONFIG_FILENAMES.map((name) => path.join(dir, name)).filter((p) =>
+    fs.existsSync(p),
+  );
+}
+
 /**
- * Resolve the config file path for the given scope.
+ * Resolve the config file a write should target.
  *
- * - `global`: searches `~/.config/opencode/` (or `%APPDATA%/opencode/` on Windows)
- * - `local`:  searches the project root directory
- *
- * If no existing file is found, defaults to `opencode.json`.
+ * A directory may hold both `opencode.json` and `opencode.jsonc`, and OpenCode
+ * merges them (`opencode.jsonc` wins). Whenever one of them already carries the
+ * `mcp` field, that file is the target — preferring `opencode.jsonc` when both
+ * do. Otherwise the first existing file is used, defaulting to `opencode.json`.
  */
 function resolveConfigFile(scope: Scope, projectDir: string): string {
-  const dir = scope === "global" ? globalConfigDir() : projectDir;
+  const existing = existingConfigFiles(scope, projectDir);
 
-  for (const name of CONFIG_FILENAMES) {
-    const p = path.join(dir, name);
-    if (fs.existsSync(p)) return p;
+  for (const p of [...existing].reverse()) {
+    if (hasMcpField(p)) return p;
   }
 
+  if (existing[0]) return existing[0];
+
+  const dir = scope === "global" ? globalConfigDir() : projectDir;
   return path.join(dir, "opencode.json");
 }
 
@@ -161,15 +172,159 @@ function resolveConfigFile(scope: Scope, projectDir: string): string {
 // JSONC helpers (same heuristic as install.mjs)
 // ---------------------------------------------------------------------------
 
+/**
+ * Strip `//` and block comments from JSONC text without touching string
+ * literals (so URLs such as `https://…` survive).
+ */
+function stripJsonComments(text: string): string {
+  let out = "";
+  let inString = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (inLineComment) {
+      if (ch === "\n") {
+        inLineComment = false;
+        out += ch;
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (ch === "*" && next === "/") {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+
+    if (inString) {
+      out += ch;
+      if (ch === "\\") {
+        out += next ?? "";
+        i++;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+    } else if (ch === "/" && next === "/") {
+      inLineComment = true;
+      i++;
+    } else if (ch === "/" && next === "*") {
+      inBlockComment = true;
+      i++;
+    } else {
+      out += ch;
+    }
+  }
+
+  return out;
+}
+
+/** Drop trailing commas (`[1,2,]` / `{"a":1,}`) outside string literals. */
+function stripTrailingCommas(text: string): string {
+  let out = "";
+  let inString = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (inString) {
+      out += ch;
+      if (ch === "\\") {
+        out += text[i + 1] ?? "";
+        i++;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+      continue;
+    }
+
+    if (ch === ",") {
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j])) j++;
+      if (text[j] === "}" || text[j] === "]") continue;
+    }
+
+    out += ch;
+  }
+
+  return out;
+}
+
+/**
+ * Parse a config file that may be strict JSON, JSONC (comments) or JSON5-ish
+ * (trailing commas) — OpenCode accepts all of them.
+ */
 function readJSONC(p: string): RawConfig {
   const raw = fs.readFileSync(p, "utf-8");
-  const stripped = raw.replace(/^\s*\/\/.*$/gm, "");
-  return JSON.parse(stripped) as RawConfig;
+  return JSON.parse(stripTrailingCommas(stripJsonComments(raw))) as RawConfig;
 }
 
 function writeJSON(p: string, obj: RawConfig): void {
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, JSON.stringify(obj, null, 2) + "\n", "utf-8");
+}
+
+function readConfigSafe(p: string): RawConfig | undefined {
+  try {
+    return readJSONC(p);
+  } catch {
+    return undefined;
+  }
+}
+
+function hasMcpField(p: string): boolean {
+  const config = readConfigSafe(p);
+  return Boolean(config?.mcp) && typeof config?.mcp === "object";
+}
+
+// ---------------------------------------------------------------------------
+// Installed-state inspection
+// ---------------------------------------------------------------------------
+
+/**
+ * Read which GLM MCP servers are currently configured for the given scope.
+ *
+ * `opencode.json` and `opencode.jsonc` are both legal; OpenCode merges them,
+ * so a server counts as installed when either file's `mcp` field declares it.
+ * Missing, unreadable or malformed files simply contribute nothing, so the
+ * picker always renders a valid initial state.
+ *
+ * @param scope      "local" (project) or "global" (user-wide)
+ * @param projectDir Working directory for local scope
+ * @returns          Names of GLM MCP servers present in the config
+ */
+export function getInstalledGlmMcp(
+  scope: Scope,
+  projectDir: string,
+): Set<string> {
+  const installed = new Set<string>();
+
+  for (const file of existingConfigFiles(scope, projectDir)) {
+    const config = readConfigSafe(file);
+    if (!config?.mcp || typeof config.mcp !== "object") continue;
+    for (const name of GLM_MCP_SERVER_NAMES) {
+      if (name in config.mcp) installed.add(name);
+    }
+  }
+
+  return installed;
 }
 
 // ---------------------------------------------------------------------------
@@ -243,12 +398,12 @@ export function installGlmMcp(
 }
 
 /**
- * Uninstall GLM MCP servers from an OpenCode config file.
+ * Uninstall GLM MCP servers from the OpenCode config files of a scope.
  *
- * Reads the target config, deletes the selected GLM MCP entries, and writes
- * back. The config file is only touched if at least one entry exists (or the
- * file itself is absent), so uninstalling from a clean setup never creates
- * stray files.
+ * A server may be declared in `opencode.json`, `opencode.jsonc`, or both, so
+ * every file that declares a selected server is edited. Files are only touched
+ * if at least one entry exists, so uninstalling from a clean setup never
+ * creates stray files.
  *
  * @param scope      "local" (project) or "global" (user-wide)
  * @param projectDir Working directory for local scope
@@ -260,65 +415,76 @@ export function uninstallGlmMcp(
   projectDir: string,
   servers?: ReadonlySet<string>,
 ): UninstallResult {
-  const filePath = resolveConfigFile(scope, projectDir);
+  const files = existingConfigFiles(scope, projectDir);
+  const targets = servers ?? new Set<string>(GLM_MCP_SERVER_NAMES);
 
-  if (!fs.existsSync(filePath)) {
+  if (files.length === 0) {
     return {
       ok: true,
-      filePath,
+      filePath: resolveConfigFile(scope, projectDir),
       scope,
       removed: [],
-      missing: [...GLM_MCP_SERVER_NAMES],
+      missing: GLM_MCP_SERVER_NAMES.filter((name) => targets.has(name)),
     };
   }
 
-  let config: RawConfig;
-  try {
-    config = readJSONC(filePath);
-  } catch (e) {
-    return {
-      ok: false,
-      filePath,
-      scope,
-      removed: [],
-      missing: [],
-      error: e instanceof Error ? e.message : String(e),
-    };
+  const configs = new Map<string, RawConfig>();
+  for (const file of files) {
+    const config = readConfigSafe(file);
+    if (config) configs.set(file, config);
   }
 
-  const targets = servers ?? new Set<string>(GLM_MCP_SERVER_NAMES);
+  const modified = new Set<string>();
   const removed: string[] = [];
   const missing: string[] = [];
 
   for (const name of GLM_MCP_SERVER_NAMES) {
     if (!targets.has(name)) continue;
-    if (config.mcp && name in config.mcp) {
-      delete config.mcp[name];
-      removed.push(name);
-    } else {
+
+    const holders = [...configs].filter(
+      ([, config]) =>
+        config.mcp && typeof config.mcp === "object" && name in config.mcp,
+    );
+
+    if (holders.length === 0) {
       missing.push(name);
+      continue;
     }
+
+    for (const [file, config] of holders) {
+      delete config.mcp![name];
+      modified.add(file);
+    }
+    removed.push(name);
   }
 
-  if (removed.length === 0) {
-    return { ok: true, filePath, scope, removed, missing };
-  }
-
-  // Drop an empty `mcp` object so we don't leave `"mcp": {}` behind.
-  if (
-    config.mcp &&
-    typeof config.mcp === "object" &&
-    Object.keys(config.mcp).length === 0
-  ) {
-    delete config.mcp;
+  if (modified.size === 0) {
+    return {
+      ok: true,
+      filePath: files.join(", "),
+      scope,
+      removed,
+      missing,
+    };
   }
 
   try {
-    writeJSON(filePath, config);
+    for (const file of modified) {
+      const config = configs.get(file)!;
+      // Drop an empty `mcp` object so we don't leave `"mcp": {}` behind.
+      if (
+        config.mcp &&
+        typeof config.mcp === "object" &&
+        Object.keys(config.mcp).length === 0
+      ) {
+        delete config.mcp;
+      }
+      writeJSON(file, config);
+    }
   } catch (e) {
     return {
       ok: false,
-      filePath,
+      filePath: [...modified].join(", "),
       scope,
       removed: [],
       missing: [],
@@ -326,5 +492,11 @@ export function uninstallGlmMcp(
     };
   }
 
-  return { ok: true, filePath, scope, removed, missing };
+  return {
+    ok: true,
+    filePath: [...modified].join(", "),
+    scope,
+    removed,
+    missing,
+  };
 }

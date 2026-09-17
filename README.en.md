@@ -115,7 +115,7 @@ Language, border and refresh-interval preferences are persisted (plugin KV) and 
 
 `/glm-config` opens an interactive settings menu: display language, panel border, refresh interval. The refresh interval offers presets (1 / 2 / 5 / 10 / 30 / 60 minutes) plus custom input (1–1440 minutes, invalid input rejected); changes take effect immediately with the timer rescheduled.
 
-`/glm-mcp-manage` (alias `/glm-mcp-install`) offers interactive pickers for the action (install / uninstall), scope (Local project / Global user-wide) and server selection, writing MCP config to the corresponding `opencode.json` or removing it. Available servers:
+`/glm-mcp-manage` (alias `/glm-mcp-install`) first asks for the scope (Local project / Global user-wide), then reads that scope's config file (`opencode.json` and `opencode.jsonc` are both legal; the one holding the `mcp` field is located automatically) and renders a checkbox list of the current state: checking installs, unchecking uninstalls, and on confirm only servers whose state differs from entry are changed. Available servers:
 
 | Server         | Type   | Description                                     |
 | -------------- | ------ | ----------------------------------------------- |

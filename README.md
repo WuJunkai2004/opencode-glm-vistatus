@@ -115,7 +115,7 @@ rm -rf ~/.cache/opencode/packages/opencode-glm-vistatus
 
 `/glm-config` 打开交互式设置菜单：显示语言、面板边框、刷新间隔。刷新间隔提供预设（1 / 2 / 5 / 10 / 30 / 60 分钟）与自定义输入（1–1440 分钟，非法输入会被拒绝），修改后立即生效并重新排期定时器。
 
-`/glm-mcp-manage`（别名 `/glm-mcp-install`）支持交互式选择操作（安装 / 卸载）、范围（Local 项目 / Global 全局）和服务器列表，将 MCP 配置写入对应的 `opencode.json` 或从中移除。可管理的服务器：
+`/glm-mcp-manage`（别名 `/glm-mcp-install`）先选择范围（Local 项目 / Global 全局），随后读取该范围的配置文件（`opencode.json` / `opencode.jsonc` 均为合法文件，自动定位含 `mcp` 字段的文件），以勾选列表展示当前安装状态：勾选即安装、取消勾选即卸载，确认后仅对与进入时状态不同的服务器执行变更。可管理的服务器：
 
 | 服务器         | 类型   | 说明                          |
 | -------------- | ------ | ----------------------------- |

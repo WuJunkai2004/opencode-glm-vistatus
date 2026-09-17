@@ -58,6 +58,10 @@ bundle build fails. Never hand-edit or commit it.
   redder (`<70%` green, `70-90%` orange, `>=90%` red).
 - **Debug env**: `GLM_VISTATUS_LANG=zh|en` forces the UI language (bypasses
   auto-detection) for testing i18n.
+- **MCP config files**: `opencode.json` and `opencode.jsonc` are both legal
+  (OpenCode merges them, jsonc wins). The picker unions `mcp` entries from
+  both; installs write to the file already holding `mcp` (jsonc preferred),
+  uninstalls delete the server from every file that declares it.
 
 ## Slash commands (registered in `src/index.tsx`)
 
