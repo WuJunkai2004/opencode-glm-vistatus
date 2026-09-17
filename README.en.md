@@ -108,8 +108,6 @@ Credential discovery priority: XDG `~/.local/share/opencode/auth.json` → Windo
 | Command           | Action                                                         |
 | ----------------- | -------------------------------------------------------------- |
 | `/glm-refresh`    | Force-refresh quota data immediately                           |
-| `/glm-lang`       | Switch between Chinese and English                             |
-| `/glm-section`    | Toggle panel border visibility                                 |
 | `/glm-config`     | Plugin settings: language / border / refresh interval        |
 | `/glm-mcp-manage` | Install / uninstall GLM MCP servers (alias `/glm-mcp-install`) |
 

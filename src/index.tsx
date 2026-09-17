@@ -576,64 +576,6 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
       },
     },
     {
-      title: "GLM: Switch Language",
-      value: "glm.lang",
-      description: "Switch between Chinese and English display",
-      slash: { name: "glm-lang" },
-      onSelect: (dialog) => {
-        const cur = langZH();
-        dialog?.replace(() => (
-          <api.ui.DialogSelect
-            title="Display Language"
-            options={[
-              { title: `中文    ${cur ? "\u2713" : ""}`, value: "zh" },
-              { title: `English ${cur ? "" : "\u2713"}`, value: "en" },
-            ]}
-            onSelect={(opt: { value: string }) => {
-              const zh = opt.value === "zh";
-              api.kv.set(`${KV}.lang`, opt.value);
-              setLangZH(zh);
-              api.ui.toast({
-                message: zh ? "语言已切换为中文" : "Switched to English",
-              });
-              dialog?.clear();
-            }}
-          />
-        ));
-      },
-    },
-    {
-      title: "GLM: Toggle Border",
-      value: "glm.section",
-      description: "Show or hide the panel border",
-      slash: { name: "glm-section" },
-      onSelect: (dialog) => {
-        const borderOn = Boolean(api.kv.get(`${KV}.border`, true));
-        dialog?.replace(() => (
-          <api.ui.DialogSelect
-            title="Toggle Border"
-            options={[
-              {
-                title: `Panel Border  [${borderOn ? "ON" : "OFF"}]`,
-                value: "border",
-              },
-            ]}
-            onSelect={(opt: { value: string }) => {
-              if (opt.value === "border") {
-                const cur = Boolean(api.kv.get(`${KV}.border`, true));
-                api.kv.set(`${KV}.border`, !cur);
-                signals.setBorderVisible(!cur);
-                api.ui.toast({
-                  message: `Panel border ${!cur ? "shown" : "hidden"}`,
-                });
-              }
-              dialog?.clear();
-            }}
-          />
-        ));
-      },
-    },
-    {
       title: "GLM: Settings",
       value: "glm.config",
       description:

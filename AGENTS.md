@@ -64,8 +64,6 @@ bundle build fails. Never hand-edit or commit it.
 | Command           | Action                                                          |
 | ----------------- | --------------------------------------------------------------- |
 | `/glm-refresh`    | Force-refresh quota data immediately                            |
-| `/glm-lang`       | Switch between Chinese and English                              |
-| `/glm-section`    | Toggle panel border visibility                                  |
 | `/glm-config`     | Interactive settings: language / border / refresh interval       |
 | `/glm-mcp-manage` | Install / uninstall GLM MCP servers (alias: `/glm-mcp-install`) |
 

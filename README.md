@@ -108,8 +108,6 @@ rm -rf ~/.cache/opencode/packages/opencode-glm-vistatus
 | 命令              | 功能                                                  |
 | ----------------- | ----------------------------------------------------- |
 | `/glm-refresh`    | 立即刷新额度数据                                      |
-| `/glm-lang`       | 切换中 / 英文显示                                     |
-| `/glm-section`    | 开关面板边框显隐                                      |
 | `/glm-config`     | 插件设置：语言 / 边框 / 刷新间隔                     |
 | `/glm-mcp-manage` | 安装 / 卸载 GLM MCP 服务器（别名 `/glm-mcp-install`） |
 
