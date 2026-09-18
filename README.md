@@ -162,7 +162,7 @@ MCP                     0/1,000
 ## 构建
 
 ```bash
-npm install          # 安装依赖（peer deps 由 OpenCode 宿主提供）
+npm install          # 安装开发依赖（运行时依赖由 OpenCode 宿主提供，发布包零依赖）
 npm run build        # tsc 产物 + esbuild 打包 → dist/tui.js
 npm run typecheck    # tsc --noEmit
 ```

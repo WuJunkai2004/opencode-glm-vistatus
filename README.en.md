@@ -164,7 +164,7 @@ Progress bar color rules:
 ## Build
 
 ```bash
-npm install          # install deps (peer deps are host-provided by OpenCode)
+npm install          # install dev deps only (runtime deps are host-provided; the published package has zero deps)
 npm run build        # tsc output + esbuild bundle → dist/tui.js
 npm run typecheck    # tsc --noEmit
 ```

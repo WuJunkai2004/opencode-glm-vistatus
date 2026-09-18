@@ -5,8 +5,8 @@ OpenCode TUI plugin — real-time GLM Coding Plan quota in the sidebar.
 ## Build & Development
 
 ```bash
-npm install          # install deps (peer deps are host-provided, see below)
-npm run build        # tsc (emit + declarations) && esbuild bundle → dist/tui.js
+npm install          # install dev deps only (runtime deps are host-provided)
+npm run build        # tsc --noEmit (typecheck) && esbuild bundle → dist/tui.js (the only artifact)
 npm run typecheck    # tsc --noEmit
 npm run build:tui    # esbuild bundle only (skips tsc)
 npm run inspect      # live API debug: fetches real quota data & prints each step (needs creds)
@@ -37,15 +37,24 @@ bundle build fails. Never hand-edit or commit it.
   (`{ id, tui, setup }`) built by esbuild from `src/tui.ts`, which combines
   `src/v1/index.tsx` (V1 `tui`) and `src/v2/index.tsx` (V2 `setup`). V1 hosts read
   `tui`, V2 hosts read `setup` (V2 validates `id` + `setup` only; extra fields
-  are fine). `dist/tui.d.ts` (tsc) declares the same shape for `types`.
+  are fine). This is the ONLY published artifact — `tsc` runs `--noEmit`
+  (typecheck only) and `files` is `["dist"]`; a future `./server` would add
+  `dist/server.js` beside it.
 - No `./server` export: this plugin is TUI-only; `src/server.ts` was removed and
   `exports["./server"]` deleted with it. Do not re-add a server entry without
   giving the V2 server process a valid `setup` no-op.
 - `src/ui/panel.tsx` — the sidebar panel shared by both hosts; written
   against neutral contracts (`KvAdapter`, `PanelSignals`). V1 passes `api.kv`
   directly; V2 wraps `context.storage.store` (`src/v2/kv.ts`).
+- No `peerDependencies` on purpose: npm ≥7 auto-installs peers, so the host's
+  plugin cache would pull `@opentui/*`, `solid-js`, `@opencode-ai/*` into the
+  plugin's own `node_modules` — all dead weight (the host aliases/provides
+  them) and a renderer-duplication hazard. They live in `devDependencies`
+  for local typecheck/build only. Never re-add runtime deps: everything the
+  bundle needs at runtime is either inlined (e.g. `strip-json-comments`) or
+  host-aliased (`@opencode-ai/*`, `@opentui/*`, `solid-js` esbuild externals).
 - esbuild `external`: `@opencode-ai/*`, `@opentui/*`, `solid-js` — these are
-  **peer deps provided by the host at runtime**, never bundled. Inlining
+  **provided by the host at runtime**, never bundled. Inlining
   `@opentui/*` breaks the V2 renderer ("No renderer found").
 - JSX transform uses `@opentui/solid` as `jsxImportSource` (not `solid-js`).
 
