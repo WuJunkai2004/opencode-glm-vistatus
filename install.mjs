@@ -8,179 +8,104 @@
  * `opencode.jsonc` for forward compatibility.
  */
 
-import { readFile, writeFile, mkdir, access } from "node:fs/promises"
-import { constants } from "node:fs"
-import { homedir, platform } from "node:os"
-import { join, dirname } from "node:path"
+import { readFile, writeFile, mkdir, access } from "node:fs/promises";
+import { stripJsonComments } from "strip-json-comments";
+import { constants } from "node:fs";
+import { homedir, platform } from "node:os";
+import { join } from "node:path";
 
-const PLUGIN_SPEC = "opencode-glm-vistatus"
+const PLUGIN_SPEC = "opencode-glm-vistatus";
 
 function configDir() {
   if (platform() === "win32") {
-    return join(process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "opencode")
+    return join(
+      process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"),
+      "opencode",
+    );
   }
-  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "opencode")
+  return join(
+    process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"),
+    "opencode",
+  );
 }
 
 async function exists(p) {
-  try { await access(p, constants.F_OK); return true }
-  catch { return false }
-}
-
-function stripJsonComments(text) {
-  let out = ""
-  let inString = false
-  let inLineComment = false
-  let inBlockComment = false
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
-    const next = text[i + 1]
-
-    if (inLineComment) {
-      if (ch === "\n") {
-        inLineComment = false
-        out += ch
-      }
-      continue
-    }
-
-    if (inBlockComment) {
-      if (ch === "*" && next === "/") {
-        inBlockComment = false
-        i++
-      }
-      continue
-    }
-
-    if (inString) {
-      out += ch
-      if (ch === "\\") {
-        out += next ?? ""
-        i++
-      } else if (ch === '"') {
-        inString = false
-      }
-      continue
-    }
-
-    if (ch === '"') {
-      inString = true
-      out += ch
-    } else if (ch === "/" && next === "/") {
-      inLineComment = true
-      i++
-    } else if (ch === "/" && next === "*") {
-      inBlockComment = true
-      i++
-    } else {
-      out += ch
-    }
+  try {
+    await access(p, constants.F_OK);
+    return true;
+  } catch {
+    return false;
   }
-
-  return out
-}
-
-function stripTrailingCommas(text) {
-  let out = ""
-  let inString = false
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
-
-    if (inString) {
-      out += ch
-      if (ch === "\\") {
-        out += text[i + 1] ?? ""
-        i++
-      } else if (ch === '"') {
-        inString = false
-      }
-      continue
-    }
-
-    if (ch === '"') {
-      inString = true
-      out += ch
-      continue
-    }
-
-    if (ch === ",") {
-      let j = i + 1
-      while (j < text.length && /\s/.test(text[j])) j++
-      if (text[j] === "}" || text[j] === "]") continue
-    }
-
-    out += ch
-  }
-
-  return out
 }
 
 async function readJSONC(p) {
-  const raw = await readFile(p, "utf-8")
-  return JSON.parse(stripTrailingCommas(stripJsonComments(raw)))
+  const raw = await readFile(p, "utf-8");
+  const stripped = (test) =>
+    stripJsonComments(test, {
+      trailingCommas: true,
+    });
+  return JSON.parse(stripped(raw));
 }
 
 function formatJSONC(obj) {
-  return JSON.stringify(obj, null, 2) + "\n"
+  return JSON.stringify(obj, null, 2) + "\n";
 }
 
 function mergePlugin(existing, spec) {
-  const plugins = existing.plugin ?? []
+  const plugins = existing.plugin ?? [];
   if (plugins.some((p) => (typeof p === "string" ? p : p[0]) === spec)) {
-    return false
+    return false;
   }
-  existing.plugin = [...plugins, spec]
-  return true
+  existing.plugin = [...plugins, spec];
+  return true;
 }
 
 async function main() {
-  const dir = configDir()
-  await mkdir(dir, { recursive: true })
+  const dir = configDir();
+  await mkdir(dir, { recursive: true });
 
-  const tuiPath = join(dir, "tui.jsonc")
-  let tuiChanged = false
+  const tuiPath = join(dir, "tui.jsonc");
+  let tuiChanged = false;
 
   if (await exists(tuiPath)) {
-    const cfg = await readJSONC(tuiPath)
-    tuiChanged = mergePlugin(cfg, PLUGIN_SPEC)
+    const cfg = await readJSONC(tuiPath);
+    tuiChanged = mergePlugin(cfg, PLUGIN_SPEC);
     if (tuiChanged) {
-      await writeFile(tuiPath, formatJSONC(cfg))
-      console.log(`[opencode-glm-vistatus] Added to ${tuiPath}`)
+      await writeFile(tuiPath, formatJSONC(cfg));
+      console.log(`[opencode-glm-vistatus] Added to ${tuiPath}`);
     } else {
-      console.log(`[opencode-glm-vistatus] Already in ${tuiPath}`)
+      console.log(`[opencode-glm-vistatus] Already in ${tuiPath}`);
     }
   } else {
     const cfg = {
       $schema: "https://opencode.ai/tui.json",
       plugin: [PLUGIN_SPEC],
-    }
-    await writeFile(tuiPath, formatJSONC(cfg))
-    console.log(`[opencode-glm-vistatus] Created ${tuiPath}`)
-    tuiChanged = true
+    };
+    await writeFile(tuiPath, formatJSONC(cfg));
+    console.log(`[opencode-glm-vistatus] Created ${tuiPath}`);
+    tuiChanged = true;
   }
 
-  const ocPath = join(dir, "opencode.jsonc")
-  let ocChanged = false
+  const ocPath = join(dir, "opencode.jsonc");
+  let ocChanged = false;
 
   if (await exists(ocPath)) {
-    const cfg = await readJSONC(ocPath)
-    ocChanged = mergePlugin(cfg, PLUGIN_SPEC)
+    const cfg = await readJSONC(ocPath);
+    ocChanged = mergePlugin(cfg, PLUGIN_SPEC);
     if (ocChanged) {
-      await writeFile(ocPath, formatJSONC(cfg))
-      console.log(`[opencode-glm-vistatus] Also added to ${ocPath}`)
+      await writeFile(ocPath, formatJSONC(cfg));
+      console.log(`[opencode-glm-vistatus] Also added to ${ocPath}`);
     }
   }
 
   if (tuiChanged || ocChanged) {
-    console.log("\nDone! Restart OpenCode to see the GLM quota sidebar panel.")
+    console.log("\nDone! Restart OpenCode to see the GLM quota sidebar panel.");
   } else {
-    console.log("\nAlready installed. Restart OpenCode if you haven't yet.")
+    console.log("\nAlready installed. Restart OpenCode if you haven't yet.");
   }
 }
 
 main().catch((err) => {
-  console.error("Install failed:", err.message)
-  process.exit(1)
-})
+  console.error("Install failed:", err.message);
+  process.exit(1);
+});
