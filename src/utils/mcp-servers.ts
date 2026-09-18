@@ -22,6 +22,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import stripJsonComments from "strip-json-comments";
 import type { Platform } from "../api/endpoints";
 
 // ---------------------------------------------------------------------------
@@ -169,111 +170,19 @@ function resolveConfigFile(scope: Scope, projectDir: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// JSONC helpers (same heuristic as install.mjs)
+// JSONC parsing
 // ---------------------------------------------------------------------------
 
 /**
- * Strip `//` and block comments from JSONC text without touching string
- * literals (so URLs such as `https://…` survive).
- */
-function stripJsonComments(text: string): string {
-  let out = "";
-  let inString = false;
-  let inLineComment = false;
-  let inBlockComment = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    const next = text[i + 1];
-
-    if (inLineComment) {
-      if (ch === "\n") {
-        inLineComment = false;
-        out += ch;
-      }
-      continue;
-    }
-
-    if (inBlockComment) {
-      if (ch === "*" && next === "/") {
-        inBlockComment = false;
-        i++;
-      }
-      continue;
-    }
-
-    if (inString) {
-      out += ch;
-      if (ch === "\\") {
-        out += next ?? "";
-        i++;
-      } else if (ch === '"') {
-        inString = false;
-      }
-      continue;
-    }
-
-    if (ch === '"') {
-      inString = true;
-      out += ch;
-    } else if (ch === "/" && next === "/") {
-      inLineComment = true;
-      i++;
-    } else if (ch === "/" && next === "*") {
-      inBlockComment = true;
-      i++;
-    } else {
-      out += ch;
-    }
-  }
-
-  return out;
-}
-
-/** Drop trailing commas (`[1,2,]` / `{"a":1,}`) outside string literals. */
-function stripTrailingCommas(text: string): string {
-  let out = "";
-  let inString = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-
-    if (inString) {
-      out += ch;
-      if (ch === "\\") {
-        out += text[i + 1] ?? "";
-        i++;
-      } else if (ch === '"') {
-        inString = false;
-      }
-      continue;
-    }
-
-    if (ch === '"') {
-      inString = true;
-      out += ch;
-      continue;
-    }
-
-    if (ch === ",") {
-      let j = i + 1;
-      while (j < text.length && /\s/.test(text[j])) j++;
-      if (text[j] === "}" || text[j] === "]") continue;
-    }
-
-    out += ch;
-  }
-
-  return out;
-}
-
-/**
  * Parse a config file that may be strict JSON, JSONC (comments) or JSON5-ish
- * (trailing commas) — OpenCode accepts all of them.
+ * (trailing commas) — OpenCode accepts all of them. `strip-json-comments` is
+ * bundled into `dist/tui.js` by esbuild, so no host-side dependency is needed.
  */
 function readJSONC(p: string): RawConfig {
   const raw = fs.readFileSync(p, "utf-8");
-  return JSON.parse(stripTrailingCommas(stripJsonComments(raw))) as RawConfig;
+  return JSON.parse(
+    stripJsonComments(raw, { trailingCommas: true }),
+  ) as RawConfig;
 }
 
 function writeJSON(p: string, obj: RawConfig): void {

@@ -2,7 +2,7 @@
 
 /**
  * Shared GLM quota sidebar panel, consumed by both host entrypoints:
- *   V1 (`src/index.tsx`)  — registers via `api.slots.register`, passes `api.kv`
+ *   V1 (`src/v1/index.tsx`)  — registers via `api.slots.register`, passes `api.kv`
  *   V2 (`src/v2/index.tsx`) — registers via `context.ui.slot`, passes a
  *     `storage.store`-backed adapter (`src/v2/kv.ts`)
  *
