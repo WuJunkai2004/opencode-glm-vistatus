@@ -29,7 +29,6 @@ jobs:
       - name: Sync VERSION.txt → package.json + _version.ts
         run: |
           npm run sync-version
-          npm run version
 
       - name: Build
         run: npm run build

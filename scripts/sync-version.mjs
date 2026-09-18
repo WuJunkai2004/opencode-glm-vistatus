@@ -24,3 +24,9 @@ if (pkg.version !== version) {
 } else {
   console.log(`[sync-version] package.json already at ${version}`);
 }
+
+writeFileSync(
+  "src/_version.ts",
+  `// auto-generated
+export const PLUGIN_VERSION="${version}";`,
+);

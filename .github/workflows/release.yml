@@ -33,7 +33,6 @@ jobs:
       - name: Sync package.json + _version.ts
         run: |
           npm run sync-version
-          npm run version
 
       - name: Commit, tag, push
         run: |
