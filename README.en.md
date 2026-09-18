@@ -23,27 +23,31 @@ English | [简体中文](./README.md)
 
 ## Installation
 
-### Option 1: OpenCode command install (recommended)
+### Option 1: OpenCode command palette (recommended, works on V1 & V2)
 
-In OpenCode, press **`Ctrl + P`** to open the command palette, search for **`install plugin`**, and enter:
+In OpenCode, press **`Ctrl + P`** to open the command palette, find **`plugin`** (Install Plugin), and enter:
 
 ```
 opencode-glm-vistatus
 ```
 
-Press Enter to complete the installation and configuration.
+Press Enter to complete the installation and configuration. The host writes
+the right config file for its own version (V2 → `cli.json`, V1 →
+`tui.jsonc`) and pulls the plugin from npm — no manual file editing needed.
 
-### Option 2: npx one-shot install
+### Option 2: manual configuration (fallback)
 
-```bash
-npx opencode-glm-vistatus
+Only needed when the host has no built-in install command.
+
+V2 (opencode 2.x) — add to `cli.json` in your config directory:
+
+```jsonc
+{
+  "plugins": [{ "package": "opencode-glm-vistatus" }]
+}
 ```
 
-The install script automatically writes to `tui.jsonc` in the cross-platform OpenCode config directory (and syncs to `opencode.jsonc` when present) to register the plugin. The plugin spec is the bare name `opencode-glm-vistatus` (no `@latest`).
-
-### Option 3: manual configuration
-
-Add the plugin to `tui.jsonc` in your config directory:
+V1 (opencode 1.x) — add to `tui.jsonc` in your config directory:
 
 ```jsonc
 {
@@ -65,9 +69,17 @@ Enter any session to see the GLM quota panel in the sidebar.
 
 **1. Remove the plugin configuration**
 
-Delete `"opencode-glm-vistatus"` from the `plugin` array in `tui.jsonc` (and `opencode.jsonc`, if present):
+Delete `"opencode-glm-vistatus"` from the `plugins` array in `cli.json` (V2) and/or the `plugin` array in `tui.jsonc` (V1):
 
 ```jsonc
+// cli.json (V2)
+{
+  "plugins": [] // remove the { "package": "opencode-glm-vistatus" } entry
+}
+```
+
+```jsonc
+// tui.jsonc (V1)
 {
   "$schema": "https://opencode.ai/tui.json",
   "plugin": [], // remove the "opencode-glm-vistatus" entry
@@ -159,8 +171,9 @@ npm run typecheck    # tsc --noEmit
 
 Build artifacts:
 
-- `dist/tui.js` — SolidJS-bundled TUI plugin (the actually-loaded plugin)
-- `dist/server.js` — empty server-plugin shell for compatibility
+- `dist/tui.js` — dual-format TUI plugin bundle (`{ id, tui, setup }`); this IS
+  the `./tui` export target: V1 hosts read the `tui` field, V2 hosts read
+  the `setup` field
 
 ## Architecture
 
