@@ -6,12 +6,9 @@
   "type": "module",
   "types": "dist/index.d.ts",
   "exports": {
-    "./server": {
-      "import": "./dist/server.js",
-      "types": "./dist/server.d.ts"
-    },
     "./tui": {
       "import": "./dist/tui.js",
+      "types": "./dist/tui.d.ts",
       "config": {
         "enabled": true
       }
@@ -34,7 +31,6 @@
     "typecheck": "tsc --noEmit",
     "sync-version": "node scripts/sync-version.mjs",
     "inspect": "node scripts/inspect.mjs",
-    "version": "node -e \"require('fs').writeFileSync('src/_version.ts','// auto-generated\\nexport const PLUGIN_VERSION='+JSON.stringify(require('./package.json').version)+';\\n')\"",
     "prepublishOnly": "npm run sync-version && npm run build"
   },
   "keywords": [
