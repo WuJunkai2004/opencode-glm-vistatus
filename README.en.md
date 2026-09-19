@@ -43,7 +43,7 @@ V2 (opencode 2.x) — add to `cli.json` in your config directory:
 
 ```jsonc
 {
-  "plugins": [{ "package": "opencode-glm-vistatus" }]
+  "plugins": [{ "package": "opencode-glm-vistatus" }],
 }
 ```
 
@@ -74,7 +74,7 @@ Delete `"opencode-glm-vistatus"` from the `plugins` array in `cli.json` (V2) and
 ```jsonc
 // cli.json (V2)
 {
-  "plugins": [] // remove the { "package": "opencode-glm-vistatus" } entry
+  "plugins": [], // remove the { "package": "opencode-glm-vistatus" } entry
 }
 ```
 
@@ -86,13 +86,7 @@ Delete `"opencode-glm-vistatus"` from the `plugins` array in `cli.json` (V2) and
 }
 ```
 
-**2. Uninstall the global npm package (optional, if you ran `npm i -g`)**
-
-```bash
-npm uninstall -g opencode-glm-vistatus
-```
-
-**3. Clear the OpenCode plugin cache**
+**2. Clear the OpenCode plugin cache**
 
 Due to [OpenCode known issue #6774](https://github.com/anomalyco/opencode/issues/6774), plugins are cached locally; after removing the config it is recommended to clear the cache as well:
 
@@ -106,7 +100,7 @@ Remove-Item -Recurse -Force "$env:USERPROFILE\.cache\opencode\packages\opencode-
 rm -rf ~/.cache/opencode/packages/opencode-glm-vistatus
 ```
 
-**4. Restart OpenCode**
+**3. Restart OpenCode**
 
 ## Prerequisites
 
@@ -120,7 +114,7 @@ Credential discovery priority: XDG `~/.local/share/opencode/auth.json` → Windo
 | Command           | Action                                                         |
 | ----------------- | -------------------------------------------------------------- |
 | `/glm-refresh`    | Force-refresh quota data immediately                           |
-| `/glm-config`     | Plugin settings: language / border / refresh interval        |
+| `/glm-config`     | Plugin settings: language / border / refresh interval          |
 | `/glm-mcp-manage` | Install / uninstall GLM MCP servers (alias `/glm-mcp-install`) |
 
 Language, border and refresh-interval preferences are persisted (plugin KV) and survive restarts.
@@ -177,14 +171,14 @@ Build artifacts:
 
 ## Architecture
 
-| Aspect           | Implementation                                                 |
-| ---------------- | -------------------------------------------------------------- |
-| Plugin type      | TUI plugin (sidebar_content slot)                              |
-| Rendering        | SolidJS (@opentui/solid)                                       |
-| Data source      | Z.AI / ZHIPU Monitor API (3 endpoints per platform)            |
-| Credentials      | OpenCode auth.json / environment variables                     |
-| HTTP client      | `fetch()` + AbortController 10s timeout                        |
-| Error strategy   | `Promise.allSettled` graceful degradation (shows partial data) |
+| Aspect           | Implementation                                                     |
+| ---------------- | ------------------------------------------------------------------ |
+| Plugin type      | TUI plugin (sidebar_content slot)                                  |
+| Rendering        | SolidJS (@opentui/solid)                                           |
+| Data source      | Z.AI / ZHIPU Monitor API (3 endpoints per platform)                |
+| Credentials      | OpenCode auth.json / environment variables                         |
+| HTTP client      | `fetch()` + AbortController 10s timeout                            |
+| Error strategy   | `Promise.allSettled` graceful degradation (shows partial data)     |
 | Refresh strategy | first fetch on mount + timed polling (default 5 min, customizable) |
 
 ## Troubleshooting

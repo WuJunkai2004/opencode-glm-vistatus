@@ -41,7 +41,7 @@ V2（opencode 2.x）在配置目录的 `cli.json` 中添加：
 
 ```jsonc
 {
-  "plugins": [{ "package": "opencode-glm-vistatus" }]
+  "plugins": [{ "package": "opencode-glm-vistatus" }],
 }
 ```
 
@@ -72,7 +72,7 @@ V1（opencode 1.x）在配置目录的 `tui.jsonc` 中添加：
 ```jsonc
 // cli.json（V2）
 {
-  "plugins": [] // 删除 { "package": "opencode-glm-vistatus" } 这一项
+  "plugins": [], // 删除 { "package": "opencode-glm-vistatus" } 这一项
 }
 ```
 
@@ -84,13 +84,7 @@ V1（opencode 1.x）在配置目录的 `tui.jsonc` 中添加：
 }
 ```
 
-**2. 卸载 npm 全局包（可选，若曾 `npm i -g` 安装）**
-
-```bash
-npm uninstall -g opencode-glm-vistatus
-```
-
-**3. 清除 OpenCode 插件缓存**
+**2. 清除 OpenCode 插件缓存**
 
 由于 [OpenCode 已知问题 #6774](https://github.com/anomalyco/opencode/issues/6774)，插件会被缓存到本地，删除配置后建议一并清缓存：
 
@@ -104,7 +98,7 @@ Remove-Item -Recurse -Force "$env:USERPROFILE\.cache\opencode\packages\opencode-
 rm -rf ~/.cache/opencode/packages/opencode-glm-vistatus
 ```
 
-**4. 重启 OpenCode**
+**3. 重启 OpenCode**
 
 ## 前置条件
 
@@ -118,7 +112,7 @@ rm -rf ~/.cache/opencode/packages/opencode-glm-vistatus
 | 命令              | 功能                                                  |
 | ----------------- | ----------------------------------------------------- |
 | `/glm-refresh`    | 立即刷新额度数据                                      |
-| `/glm-config`     | 插件设置：语言 / 边框 / 刷新间隔                     |
+| `/glm-config`     | 插件设置：语言 / 边框 / 刷新间隔                      |
 | `/glm-mcp-manage` | 安装 / 卸载 GLM MCP 服务器（别名 `/glm-mcp-install`） |
 
 语言、边框与刷新间隔偏好会持久化保存（插件 KV），重启后保留。
@@ -174,14 +168,14 @@ npm run typecheck    # tsc --noEmit
 
 ## 技术架构
 
-| 维度        | 实现                                            |
-| ----------- | ----------------------------------------------- |
-| 插件类型    | TUI 插件（sidebar_content 插槽）                |
-| 渲染方式    | SolidJS (@opentui/solid)                        |
-| 数据来源    | Z.AI / ZHIPU Monitor API（每平台 3 端点）       |
-| 凭证来源    | OpenCode auth.json / 环境变量                   |
-| HTTP 客户端 | `fetch()` + AbortController 10s 超时            |
-| 错误策略    | `Promise.allSettled` 优雅降级（部分失败也展示） |
+| 维度        | 实现                                             |
+| ----------- | ------------------------------------------------ |
+| 插件类型    | TUI 插件（sidebar_content 插槽）                 |
+| 渲染方式    | SolidJS (@opentui/solid)                         |
+| 数据来源    | Z.AI / ZHIPU Monitor API（每平台 3 端点）        |
+| 凭证来源    | OpenCode auth.json / 环境变量                    |
+| HTTP 客户端 | `fetch()` + AbortController 10s 超时             |
+| 错误策略    | `Promise.allSettled` 优雅降级（部分失败也展示）  |
 | 刷新策略    | 挂载首次获取 + 定时轮询（默认 5 分钟，可自定义） |
 
 ## 故障排查
