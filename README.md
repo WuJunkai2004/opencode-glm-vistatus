@@ -105,7 +105,7 @@ rm -rf ~/.cache/opencode/packages/opencode-glm-vistatus
 1. 通过 `/connect` 命令认证 Z.AI / ZHIPU 账户，或
 2. 设置环境变量 `ZAI_API_KEY` / `ZHIPU_API_KEY`
 
-凭证发现优先级：XDG `~/.local/share/opencode/auth.json` → Windows `%LOCALAPPDATA%\opencode\auth.json` → 环境变量。
+凭证发现优先级：V2 凭证数据库 `~/.local/share/opencode/opencode.db`（支持 `OPENCODE_DB` / `XDG_DATA_HOME` 覆盖）→ XDG `~/.local/share/opencode/auth.json` → Windows `%LOCALAPPDATA%\opencode\auth.json` → 环境变量。
 
 ## 斜杠命令
 
@@ -173,7 +173,7 @@ npm run typecheck    # tsc --noEmit
 | 插件类型    | TUI 插件（sidebar_content 插槽）                 |
 | 渲染方式    | SolidJS (@opentui/solid)                         |
 | 数据来源    | Z.AI / ZHIPU Monitor API（每平台 3 端点）        |
-| 凭证来源    | OpenCode auth.json / 环境变量                    |
+| 凭证来源    | OpenCode V2 凭证数据库 / auth.json / 环境变量    |
 | HTTP 客户端 | `fetch()` + AbortController 10s 超时             |
 | 错误策略    | `Promise.allSettled` 优雅降级（部分失败也展示）  |
 | 刷新策略    | 挂载首次获取 + 定时轮询（默认 5 分钟，可自定义） |
@@ -182,7 +182,7 @@ npm run typecheck    # tsc --noEmit
 
 | 现象                  | 可能原因                                                           |
 | --------------------- | ------------------------------------------------------------------ |
-| 面板显示空白 / 无数据 | 未认证，或 auth.json 路径未命中，或未设置环境变量                  |
+| 面板显示空白 / 无数据 | 未认证，或凭证数据库 / auth.json 路径未命中，或未设置环境变量      |
 | 数据部分缺失          | 某个 API 端点超时（10s），其余仍会展示                             |
 | 语言切换无效          | 可设置环境变量 `GLM_VISTATUS_LANG=zh\|en` 强制语言（绕过自动检测） |
 | 数据不更新            | 重启 OpenCode，或使用 `/glm-refresh` 立即刷新                      |

@@ -73,10 +73,11 @@ A **fresh TUI process** is required either way: a running TUI caches ESM by URL 
 
 - **Auth header: NO `"Bearer"` prefix** — `Authorization: <token>` raw. This is intentional and required by the GLM Monitor API (`src/api/client.ts:40`).
 - **Credential discovery priority** (`src/utils/auth.ts`):
-  1. `~/.local/share/opencode/auth.json` (XDG, cross-platform, preferred)
-  2. `%LOCALAPPDATA%/opencode/auth.json` (Windows legacy fallback)
-  3. env `ZAI_API_KEY` / `ZHIPU_API_KEY` (alias `ZHIPUAI_API_KEY`)
-- auth.json lookup only matches known provider IDs (`zhipuai-coding-plan`, `zai-coding-plan`, `zai`, `z-ai`, `z.ai`, `zhipu`, `zhipuai`) — entries under other IDs are ignored.
+  1. V2 SQLite credential DB `~/.local/share/opencode/opencode.db` (`credential` table, `active = 1`, newest `time_updated` per integration; honors `OPENCODE_DB` / `XDG_DATA_HOME`; `node:sqlite` loaded lazily so hosts without it fall through). V2 is authoritative: it imports auth.json into the DB once and never writes that file back.
+  2. `~/.local/share/opencode/auth.json` (XDG, cross-platform, V1 preferred)
+  3. `%LOCALAPPDATA%/opencode/auth.json` (Windows legacy fallback)
+  4. env `ZAI_API_KEY` / `ZHIPU_API_KEY` (alias `ZHIPUAI_API_KEY`)
+- Credential lookup (DB + auth.json) only matches known provider IDs (`zhipuai-coding-plan`, `zai-coding-plan`, `zai`, `z-ai`, `z.ai`, `zhipu`, `zhipuai`) — entries under other IDs are ignored.
 - `fetch()` + `AbortController` 10s timeout; `Promise.allSettled` so one failed endpoint doesn't blank the panel (graceful degradation).
 - Auto-refresh via `setInterval` (default 5 min, configurable via `/glm-config`); first fetch on mount.
 - Quota color logic is **inverted** from typical cache plugins: higher usage = redder (`<70%` green, `70-90%` orange, `>=90%` red).

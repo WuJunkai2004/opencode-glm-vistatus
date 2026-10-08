@@ -107,7 +107,7 @@ rm -rf ~/.cache/opencode/packages/opencode-glm-vistatus
 1. Authenticate your Z.AI / ZHIPU account via the `/connect` command, or
 2. Set the `ZAI_API_KEY` / `ZHIPU_API_KEY` environment variables
 
-Credential discovery priority: XDG `~/.local/share/opencode/auth.json` → Windows `%LOCALAPPDATA%\opencode\auth.json` → environment variables.
+Credential discovery priority: V2 credential DB `~/.local/share/opencode/opencode.db` (honors `OPENCODE_DB` / `XDG_DATA_HOME`) → XDG `~/.local/share/opencode/auth.json` → Windows `%LOCALAPPDATA%\opencode\auth.json` → environment variables.
 
 ## Slash Commands
 
@@ -176,19 +176,19 @@ Build artifacts:
 | Plugin type      | TUI plugin (sidebar_content slot)                                  |
 | Rendering        | SolidJS (@opentui/solid)                                           |
 | Data source      | Z.AI / ZHIPU Monitor API (3 endpoints per platform)                |
-| Credentials      | OpenCode auth.json / environment variables                         |
+| Credentials      | OpenCode V2 credential DB / auth.json / environment variables      |
 | HTTP client      | `fetch()` + AbortController 10s timeout                            |
 | Error strategy   | `Promise.allSettled` graceful degradation (shows partial data)     |
 | Refresh strategy | first fetch on mount + timed polling (default 5 min, customizable) |
 
 ## Troubleshooting
 
-| Symptom                     | Likely cause                                                              |
-| --------------------------- | ------------------------------------------------------------------------- |
-| Panel blank / no data       | Not authenticated, auth.json path not matched, or env vars unset          |
-| Partial data missing        | An API endpoint timed out (10s); the rest still renders                   |
-| Language toggle not working | Set `GLM_VISTATUS_LANG=zh\|en` to force a language (bypasses auto-detect) |
-| Data not updating           | Restart OpenCode, or run `/glm-refresh` to refresh now                    |
+| Symptom                     | Likely cause                                                                |
+| --------------------------- | --------------------------------------------------------------------------- |
+| Panel blank / no data       | Not authenticated, credential DB / auth.json not matched, or env vars unset |
+| Partial data missing        | An API endpoint timed out (10s); the rest still renders                     |
+| Language toggle not working | Set `GLM_VISTATUS_LANG=zh\|en` to force a language (bypasses auto-detect)   |
+| Data not updating           | Restart OpenCode, or run `/glm-refresh` to refresh now                      |
 
 ## License
 
