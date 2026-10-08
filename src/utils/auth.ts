@@ -1,16 +1,20 @@
 /**
- * Credential discovery — reads OpenCode auth.json + env vars.
+ * Credential discovery — reads OpenCode's V2 credential DB, V1 auth.json + env vars.
  * Source: opencode-glm-quota/src/utils/auth-path.ts + src/index.ts:92-147
  *
  * Priority order:
- * 1. ~/.local/share/opencode/auth.json (XDG path, cross-platform, preferred)
- * 2. %LOCALAPPDATA%/opencode/auth.json (Windows legacy fallback)
- * 3. Environment variables ZAI_API_KEY / ZHIPU_API_KEY
+ * 1. V2 SQLite credential DB (~/.local/share/opencode/opencode.db) — V2 imports
+ *    auth.json into it once and never writes that file back, so on V2 the DB is
+ *    the only source that stays current
+ * 2. ~/.local/share/opencode/auth.json (XDG path, cross-platform, V1 preferred)
+ * 3. %LOCALAPPDATA%/opencode/auth.json (Windows legacy fallback)
+ * 4. Environment variables ZAI_API_KEY / ZHIPU_API_KEY
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { createRequire } from "node:module";
 import type { Platform } from "../api/endpoints";
 import { detectPlatform } from "../api/platforms";
 
@@ -53,6 +57,124 @@ function getAuthFilePathCandidates(): string[] {
   return [xdgPath];
 }
 
+/** Minimal structural types for node:sqlite (built-in since Node 22.5 / Bun 1.1.9). */
+interface SqliteStatement {
+  all(): unknown[];
+}
+
+interface SqliteDatabase {
+  prepare(sql: string): SqliteStatement;
+  close(): void;
+}
+
+interface SqliteModule {
+  DatabaseSync: new (
+    dbPath: string,
+    options?: { readOnly?: boolean },
+  ) => SqliteDatabase;
+}
+
+/**
+ * Resolve node:sqlite lazily so hosts whose runtime lacks it — or that load
+ * this bundle from a virtual URL where require() cannot resolve — fall through
+ * to the next discovery step instead of failing the whole panel.
+ */
+function loadSqliteSync(): SqliteModule | null {
+  try {
+    const getBuiltinModule = (
+      process as { getBuiltinModule?: (id: string) => unknown }
+    ).getBuiltinModule;
+    const mod = getBuiltinModule?.("node:sqlite") as SqliteModule | undefined;
+    if (mod) return mod;
+  } catch {
+    // fall through to require()
+  }
+  try {
+    return createRequire(import.meta.url)("node:sqlite") as SqliteModule;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get ordered candidate paths for OpenCode's V2 SQLite credential DB.
+ * Mirrors the host's data-dir resolution: OPENCODE_DB > XDG_DATA_HOME > default.
+ */
+function getDbFilePathCandidates(): string[] {
+  if (process.env.OPENCODE_DB) {
+    return [process.env.OPENCODE_DB];
+  }
+  const dataHome =
+    process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
+  return [path.join(dataHome, "opencode", "opencode.db")];
+}
+
+/**
+ * Read credentials from the V2 SQLite DB (`credential` table).
+ * Each row's `value` is JSON, e.g. {"type":"key","key":"..."}; `active = 1`
+ * marks the account the host currently uses. Read-only open + WAL mode make
+ * this safe while the OpenCode server holds the database.
+ */
+function getCredentialsFromDb(): Credentials | null {
+  const sqlite = loadSqliteSync();
+  if (!sqlite) return null;
+
+  for (const dbPath of getDbFilePathCandidates()) {
+    if (!fs.existsSync(dbPath)) continue;
+
+    let db: SqliteDatabase | undefined;
+    try {
+      db = new sqlite.DatabaseSync(dbPath, { readOnly: true });
+      const rows = db
+        .prepare(
+          "SELECT integration_id, value, time_updated FROM credential WHERE active = 1",
+        )
+        .all() as Array<{
+        integration_id: string;
+        value: string;
+        time_updated: number;
+      }>;
+
+      // Same provider-priority walk as the auth.json path; when an
+      // integration has several active accounts, take the newest.
+      for (const providerId of CANDIDATE_PROVIDER_IDS) {
+        let newest: (typeof rows)[number] | undefined;
+        for (const row of rows) {
+          if (row.integration_id !== providerId) continue;
+          if (!newest || row.time_updated > newest.time_updated) {
+            newest = row;
+          }
+        }
+        if (!newest) continue;
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(newest.value);
+        } catch {
+          continue;
+        }
+        const token = extractKeyFromEntry(parsed);
+        if (token) {
+          const platform = detectPlatform(providerId);
+          if (platform) {
+            return { token, platform };
+          }
+        }
+      }
+    } catch {
+      // Silent fail, try next candidate
+    } finally {
+      try {
+        db?.close();
+      } catch {
+        // already closed / never opened
+      }
+    }
+  }
+
+  return null;
+}
+
 /**
  * Extract API key from auth entry (supports string or object formats).
  */
@@ -75,11 +197,16 @@ function extractKeyFromEntry(entry: unknown): string | null {
 }
 
 /**
- * Get credentials from OpenCode auth.json or environment variables.
+ * Get credentials from OpenCode's V2 credential DB, V1 auth.json or
+ * environment variables.
  * @returns Credentials or null if not found
  */
 export function getCredentials(): Credentials | null {
-  // Priority 1: OpenCode auth.json — probe every candidate path
+  // Priority 1: OpenCode V2 SQLite credential DB
+  const dbCreds = getCredentialsFromDb();
+  if (dbCreds) return dbCreds;
+
+  // Priority 2: OpenCode V1 auth.json — probe every candidate path
   for (const authPath of getAuthFilePathCandidates()) {
     if (!fs.existsSync(authPath)) continue;
     try {
@@ -103,7 +230,7 @@ export function getCredentials(): Credentials | null {
     }
   }
 
-  // Priority 2: Environment variables (development/testing)
+  // Priority 3: Environment variables (development/testing)
   if (process.env.ZAI_API_KEY) {
     return { token: process.env.ZAI_API_KEY, platform: "ZAI" };
   }
