@@ -19,7 +19,7 @@ No test suite exists. Verify changes with `npm run typecheck && npm run build`.
 `VERSION.txt` (e.g. `0.1.0`) drives everything — never hand-edit `package.json`'s `version` directly. `npm run sync-version` copies `VERSION.txt` → `package.json` + `src/_version.ts` from it. `prepublishOnly` runs both automatically.
 
 - `release.yml` (manual `workflow_dispatch`): bumps per rule (`minor+1, patch=0`; `minor>=10` rolls over to `major+1`), commits, tags `vX.Y.Z`, creates a GitHub Release. That VERSION.txt commit then triggers `publish.yml`.
-- `publish.yml`: fires on any `VERSION.txt` change on `main` → syncs, builds, `npm publish --provenance --access public`. Requires `NPM_TOKEN` secret.
+- `publish.yml`: fires on any `VERSION.txt` change on `main` → syncs, builds, `npm publish --provenance --access public`, commits the synced `package.json` back to `main`.
 
 ### `src/_version.ts` is generated & gitignored
 

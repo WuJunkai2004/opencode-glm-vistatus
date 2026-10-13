@@ -1,7 +1,8 @@
 name: Publish to npm
 
 # Fires only when VERSION.txt changes on main (e.g. a release.yml commit,
-# or a manual edit). Syncs package.json, builds, and publishes to npm.
+# or a manual edit). Syncs package.json, builds, publishes to npm, then
+# commits the synced package.json back to main.
 on:
   push:
     branches: [main]
@@ -9,7 +10,7 @@ on:
       - "VERSION.txt"
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -35,3 +36,16 @@ jobs:
 
       - name: Publish
         run: npm publish --provenance --access public
+
+      - name: Commit synced package.json (github-actions[bot] via GITHUB_TOKEN)
+        run: |
+          v="$(tr -d '[:space:]' < VERSION.txt)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          if git diff --cached --quiet; then
+            echo "package.json already in sync — nothing to commit"
+          else
+            git commit -m "chore: sync package.json to VERSION.txt (v${v})"
+            git push
+          fi
