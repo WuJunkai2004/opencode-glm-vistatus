@@ -16,7 +16,7 @@ English | [简体中文](./README.md)
 - Account plan tier (Pro / Lite, etc.)
 - Platform info (Z.AI / ZHIPU)
 - Last refresh time + next refresh estimate
-- Auto-refresh every 5 minutes (customizable, 1–1440 min)
+- Auto-refresh every 5 minutes (customizable, 1–1440 min); sessions share a quota record via the host KV so each refresh window triggers only one real request globally
 - Bilingual: Chinese / English
 - Morandi-style theme adaptation
 - Progress bar color shifts with usage (green → orange → red)
