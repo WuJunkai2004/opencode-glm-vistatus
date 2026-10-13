@@ -19,6 +19,7 @@ import {
   KV,
   MIN_REFRESH_INTERVAL_MIN,
   MAX_REFRESH_INTERVAL_MIN,
+  type KvAdapter,
   type PanelSignals,
 } from "../ui/panel";
 import {
@@ -36,6 +37,7 @@ import {
 
 export function buildV1Commands(
   api: TuiPluginApi,
+  kv: KvAdapter,
   signals: PanelSignals,
 ): TuiCommand[] {
   return [
@@ -63,7 +65,7 @@ export function buildV1Commands(
       onSelect: (dialog?: TuiDialogStack) => {
         function showMenu() {
           const si18n = getSettingsTranslations(signals.langZH());
-          const border = Boolean(api.kv.get(`${KV}.border`, true));
+          const border = Boolean(kv.get(`${KV}.border`, true));
           dialog?.replace(() => (
             <api.ui.DialogSelect
               title={si18n.menuTitle}
@@ -106,7 +108,7 @@ export function buildV1Commands(
               ]}
               onSelect={(opt: { value: string }) => {
                 const zh = opt.value === "zh";
-                api.kv.set(`${KV}.lang`, opt.value);
+                kv.set(`${KV}.lang`, opt.value);
                 signals.setLangZH(zh);
                 showMenu();
               }}
@@ -116,7 +118,7 @@ export function buildV1Commands(
 
         function showBorderPicker() {
           const si18n = getSettingsTranslations(signals.langZH());
-          const border = Boolean(api.kv.get(`${KV}.border`, true));
+          const border = Boolean(kv.get(`${KV}.border`, true));
           dialog?.replace(() => (
             <api.ui.DialogSelect
               title={si18n.menuBorder}
@@ -132,7 +134,7 @@ export function buildV1Commands(
               ]}
               onSelect={(opt: { value: string }) => {
                 const on = opt.value === "on";
-                api.kv.set(`${KV}.border`, on);
+                kv.set(`${KV}.border`, on);
                 signals.setBorderVisible(on);
                 showMenu();
               }}
@@ -191,7 +193,7 @@ export function buildV1Commands(
 
         function applyInterval(minutes: number) {
           const si18n = getSettingsTranslations(signals.langZH());
-          api.kv.set(`${KV}.interval`, minutes);
+          kv.set(`${KV}.interval`, minutes);
           signals.setRefreshIntervalMin(minutes);
           api.ui.toast({
             variant: "success",

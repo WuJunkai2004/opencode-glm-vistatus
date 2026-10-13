@@ -2,7 +2,8 @@
 
 /**
  * Shared GLM quota sidebar panel, consumed by both host entrypoints:
- *   V1 (`src/v1/index.tsx`)  — registers via `api.slots.register`, passes `api.kv`
+ *   V1 (`src/v1/index.tsx`)  — registers via `api.slots.register`, passes
+ *     `api.kv` wrapped by `src/v1/kv.ts`
  *   V2 (`src/v2/index.tsx`) — registers via `context.ui.slot`, passes a
  *     `storage.store`-backed adapter (`src/v2/kv.ts`)
  *
@@ -24,6 +25,14 @@ import { PLUGIN_VERSION } from "../_version";
 
 import { getCredentials } from "../utils/auth";
 import { fetchAllQuota } from "../api/client";
+import {
+  SHARED_RECORD_KEY,
+  hashToken,
+  isClaimActive,
+  normalizeRecord,
+  coordinateFetch,
+  type SharedQuotaRecord,
+} from "../utils/shared-record";
 import { parseQuotaData, type ParsedQuota } from "../utils/quota-parser";
 import { getPlatformName } from "../api/platforms";
 import {
@@ -46,6 +55,12 @@ export const DEFAULT_REFRESH_INTERVAL_MIN = 5; // minutes
 export const MIN_REFRESH_INTERVAL_MIN = 1;
 export const MAX_REFRESH_INTERVAL_MIN = 1440; // 24h
 
+// Cross-session refresh coordination (src/utils/shared-record.ts): the
+// freshness window is the refresh interval minus a small slack so each
+// timer tick still triggers exactly one global fetch per interval.
+const FRESH_WINDOW_SLACK_MS = 10_000;
+const MIN_FRESH_WINDOW_MS = 15_000;
+
 /** Initial language: `GLM_VISTATUS_LANG=zh|en` env override, else locale. */
 export function detectLangZH(): boolean {
   const debug =
@@ -66,6 +81,17 @@ export function detectLangZH(): boolean {
 export interface KvAdapter {
   get<Value = unknown>(key: string, fallback?: Value): Value;
   set(key: string, value: unknown): void | Promise<void>;
+  /**
+   * Read-mutate-write with a compare-and-set style callback. V2 runs it
+   * inside the host's file lock, so concurrent sessions serialize and the
+   * shared-record claim is atomic; V1's adapter is a best-effort naive RMW
+   * against the local view — there the claim stays advisory and the
+   * pre-claim jitter is what staggers sessions.
+   */
+  update<R>(
+    key: string,
+    fn: (current: unknown) => { next: unknown; result: R },
+  ): R | Promise<R>;
   /** True once reads are meaningful. V2's Solid store is always ready. */
   readonly ready: boolean;
 }
@@ -113,28 +139,141 @@ export function GlmQuotaPanel(props: {
   const pal = createMemo<ThemePalette>(() => buildPalette(props.theme));
 
   // ── Refresh logic ──
-  async function refresh() {
+  //
+  // Every TUI session runs this panel, so a naive per-session timer would
+  // fire the GLM Monitor API once per session per interval. Sessions share
+  // one record in the host KV (src/utils/shared-record.ts): a fresh record
+  // is applied with no network request, and stale data elects a single
+  // fetcher — atomically on V2 (locked read-modify-write), best-effort on
+  // V1 where the claim is advisory and the jitter does the staggering. The
+  // V2 store is live-synced, so the adopt effect below pulls new records
+  // from other sessions reactively.
+
+  /** Newest record ts seen for the current account (applied or merely read). */
+  let knownTs = 0;
+  /** Token hash of the record currently backing the panel (adoption filter). */
+  let knownTokenHash: string | null = null;
+  /** Record state currently applied (de-dupes redundant signal writes). */
+  let appliedTs = 0;
+  let appliedTokenHash: string | null = null;
+
+  const applyRecord = (rec: SharedQuotaRecord) => {
+    knownTs = Math.max(knownTs, rec.ts);
+    knownTokenHash = rec.tokenHash;
+    if (rec.ts <= appliedTs && appliedTokenHash === rec.tokenHash) return;
+    appliedTs = rec.ts;
+    appliedTokenHash = rec.tokenHash;
+    if (rec.ok && rec.result) {
+      setQuotaData(parseQuotaData(rec.result.quotaData, rec.result.modelData));
+      setLastUpdate(new Date(rec.ts));
+      setError(null);
+    } else {
+      setError(rec.error || t().error);
+    }
+  };
+
+  const readShared = (): SharedQuotaRecord | null =>
+    normalizeRecord(props.kv.get<unknown>(`${KV}.${SHARED_RECORD_KEY}`));
+
+  async function refresh(force = false) {
     setLoading(true);
     setError(null);
     try {
       const creds = getCredentials();
       if (!creds) {
         setError(t().noCred);
-        setLoading(false);
         return;
       }
 
       setPlatformName(getPlatformName(creds.platform));
-      const result = await fetchAllQuota(creds.token, creds.platform);
-      const parsed = parseQuotaData(result.quotaData, result.modelData);
-      setQuotaData(parsed);
-      setLastUpdate(new Date());
+      const tokenHash = hashToken(creds.token);
+
+      // Forced refresh (/glm-refresh) bypasses the freshness window but
+      // still goes through the claim, so concurrent forces collapse too.
+      const windowMs = force
+        ? 0
+        : Math.max(
+            props.signals.refreshIntervalMin() * 60_000 - FRESH_WINDOW_SLACK_MS,
+            MIN_FRESH_WINDOW_MS,
+          );
+
+      // Stale-but-usable data keeps the panel populated while revalidating;
+      // a stale failure record surfaces its error.
+      const cached = readShared();
+      const mine = cached && cached.tokenHash === tokenHash ? cached : null;
+      if (mine) knownTs = Math.max(knownTs, mine.ts);
+      if (mine && mine.ts > appliedTs) {
+        if (mine.ok) applyRecord(mine);
+        else setError(mine.error || t().error);
+      }
+
+      const outcome = await coordinateFetch({
+        tokenHash,
+        windowMs,
+        read: readShared,
+        claim: (id) => {
+          const claimTs = Date.now();
+          return Promise.resolve(
+            props.kv.update<boolean>(
+              `${KV}.${SHARED_RECORD_KEY}`,
+              (current: unknown) => {
+                const rec = normalizeRecord(current);
+                if (rec && isClaimActive(rec.claim) && rec.claim!.id !== id) {
+                  return { next: rec, result: false };
+                }
+                const base: SharedQuotaRecord = rec ?? {
+                  v: 1,
+                  tokenHash,
+                  ts: 0,
+                  ok: true,
+                };
+                return {
+                  next: { ...base, claim: { id, ts: claimTs } },
+                  result: true,
+                };
+              },
+            ),
+          );
+        },
+        publish: (rec) => {
+          // Bump before the write: the store update may reach the adopt
+          // effect (below) before publish resolves.
+          knownTs = Math.max(knownTs, rec.ts);
+          return props.kv.set(`${KV}.${SHARED_RECORD_KEY}`, rec);
+        },
+        fetch: () => fetchAllQuota(creds.token, creds.platform),
+        fetchError: t().error,
+      });
+
+      if (outcome.action === "stale") {
+        // Claim holder never published (crash / very slow network): keep
+        // whatever the panel already shows.
+        if (!quotaData() && !error()) setError(t().error);
+        return;
+      }
+      applyRecord(outcome.record);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
   }
+
+  // ── Adopt records published by other sessions (live-synced on V2) ───
+  // V2's storage store is reactive, so this effect re-runs when another
+  // session publishes; on V1 it evaluates once and the next tick adopts.
+  createEffect(() => {
+    const rec = normalizeRecord(
+      props.kv.get<unknown>(`${KV}.${SHARED_RECORD_KEY}`),
+    );
+    if (!rec || rec.ts <= knownTs) return;
+    if (!knownTokenHash || rec.tokenHash !== knownTokenHash) return;
+    // A claim write is not publishable data; wait for the holder's record.
+    if (isClaimActive(rec.claim)) return;
+    // Idle sessions keep showing good stale data on failure records; the
+    // next tick's refresh will surface the error properly.
+    if (rec.ok || !quotaData()) applyRecord(rec);
+  });
 
   let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -163,6 +302,9 @@ export function GlmQuotaPanel(props: {
       }
     } catch {}
 
+    // Adopt records published by other sessions happens reactively in the
+    // effect above (V2 live-synced store); nothing to register here.
+
     // First fetch
     refresh();
   });
@@ -175,13 +317,13 @@ export function GlmQuotaPanel(props: {
   createEffect(() => {
     const minutes = props.signals.refreshIntervalMin();
     if (refreshTimer) clearInterval(refreshTimer);
-    refreshTimer = setInterval(refresh, minutes * 60 * 1000);
+    refreshTimer = setInterval(() => refresh(), minutes * 60 * 1000);
   });
 
   // ── React to manual force-refresh signal ──
   createEffect(() => {
     const tick = props.signals.forceRefresh();
-    if (tick > 0) refresh();
+    if (tick > 0) refresh(true);
   });
 
   // ── Persist fold state ──

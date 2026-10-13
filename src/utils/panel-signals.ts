@@ -1,7 +1,8 @@
 /**
  * Shared panel state used by both host entrypoints:
- *   V1 (`src/v1`) passes `api.kv`; V2 (`src/v2`) passes the storage-backed
- *   adapter from `src/v2/kv.ts` — both satisfy the neutral `KvAdapter`.
+ *   V1 (`src/v1`) passes `api.kv` wrapped by `src/v1/kv.ts`; V2 (`src/v2`)
+ *   passes the storage-backed adapter from `src/v2/kv.ts` — both satisfy
+ *   the neutral `KvAdapter`.
  */
 
 import { createSignal } from "solid-js";

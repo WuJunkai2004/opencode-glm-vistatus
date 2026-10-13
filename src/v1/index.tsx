@@ -12,16 +12,18 @@
 
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui";
 
+import { createKv } from "./kv";
 import { createPanelSignals, restorePanelConfig } from "../utils/panel-signals";
 import { createSidebarSlot } from "./sidebar";
 import { buildV1Commands } from "./commands";
 
 const tui: TuiPlugin = async (api: TuiPluginApi) => {
+  const kv = createKv(api.kv);
   const signals = createPanelSignals();
 
   // Restore persisted config. V1 kv may not be ready at plugin init —
   // poll briefly, then restore whatever is readable.
-  const restore = () => restorePanelConfig(api.kv, signals);
+  const restore = () => restorePanelConfig(kv, signals);
   if (api.kv.ready) {
     restore();
   } else {
@@ -40,10 +42,10 @@ const tui: TuiPlugin = async (api: TuiPluginApi) => {
     poll();
   }
 
-  api.slots.register(createSidebarSlot(api, signals));
+  api.slots.register(createSidebarSlot(api, kv, signals));
 
   // ── Slash commands (/glm-refresh, /glm-config, /glm-mcp-manage) ──
-  api.command?.register(() => buildV1Commands(api, signals));
+  api.command?.register(() => buildV1Commands(api, kv, signals));
 };
 
 const mod: TuiPluginModule & { id: string } = {

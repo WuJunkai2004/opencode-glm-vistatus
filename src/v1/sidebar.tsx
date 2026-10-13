@@ -11,10 +11,11 @@ import type {
   TuiSlotContext,
   TuiSlotPlugin,
 } from "@opencode-ai/plugin/tui";
-import { GlmQuotaPanel, type PanelSignals } from "../ui/panel";
+import { GlmQuotaPanel, type KvAdapter, type PanelSignals } from "../ui/panel";
 
 export function createSidebarSlot(
   api: TuiPluginApi,
+  kv: KvAdapter,
   signals: PanelSignals,
 ): TuiSlotPlugin {
   return {
@@ -27,7 +28,7 @@ export function createSidebarSlot(
         return (
           <GlmQuotaPanel
             theme={ctx.theme.current}
-            kv={api.kv}
+            kv={kv}
             signals={signals}
           />
         );
