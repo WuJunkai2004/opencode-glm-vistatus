@@ -42,7 +42,8 @@ import {
   formatResetClock,
   formatClockShort,
 } from "../utils/format";
-import { visualWidth, truncateVisual, progressBar } from "./widgets";
+import { visualWidth, truncateVisual } from "./widgets";
+import { QuotaBar } from "./quota-block";
 import { buildPalette, dimColor, quotaColor, type ThemePalette } from "./theme";
 import { getTranslations, type Translations } from "./i18n";
 
@@ -116,8 +117,6 @@ const MIN_PANEL_WIDTH = 20;
 const DEFAULT_PANEL_WIDTH = 30;
 
 // Layout measurement constants (visual columns)
-const BAR_BRACKETS = 2; // "[" + "]"
-const BAR_GAP = 1; // space after "]"
 const HEADER_PREFIX = 2; // "▼ " or "▶ "
 
 export function GlmQuotaPanel(props: {
@@ -367,7 +366,11 @@ export function GlmQuotaPanel(props: {
     }
   });
 
-  // ── Render a quota block (multi-line layout) ──
+  // ── Render a quota block via the neutral QuotaBar base ──
+  //
+  // Maps the GLM payload onto the { title, bar, resetTime? } contract:
+  // `bar` is "xx/yy" when the API provides a total, else the bare "nn%";
+  // the reset line is composed display-ready (i18n stays with the caller).
   function renderQuotaBlock(
     label: string,
     percentage: number,
@@ -375,56 +378,25 @@ export function GlmQuotaPanel(props: {
     total: number | null,
     resetTime: number | null,
   ): JSX.Element {
-    const gauge = panelWidth() - gutter();
-    const color = quotaColor(percentage, pal());
-    const pct = formatPercentage(percentage);
-    const pctW = visualWidth(pct);
-
-    // Line 1: label (left) + used/total (right) — only when API provides total
-    const hasUsedTotal = used !== null && total !== null;
-    const usedTotal = hasUsedTotal
-      ? formatNumber(used) + "/" + formatNumber(total)
-      : "";
-
-    // Line 2: full-width bar (left) + percentage (right)
-    const barWidth = Math.max(3, gauge - BAR_BRACKETS - BAR_GAP - pctW);
-    const bar = progressBar(percentage, barWidth);
-
-    // Line 3: reset info (left)
-    const countdown = formatResetCountdown(resetTime);
-    const clock = formatResetClock(resetTime);
-
-    const labelW = visualWidth(label);
-    const valW = visualWidth(usedTotal);
-    const line1Gap = hasUsedTotal ? Math.max(1, gauge - labelW - valW) : 0;
-
+    const bar =
+      used !== null && total !== null
+        ? formatNumber(used) + "/" + formatNumber(total)
+        : formatPercentage(percentage);
+    let reset: string | null = null;
+    if (resetTime !== null) {
+      const countdown = formatResetCountdown(resetTime);
+      const clock = formatResetClock(resetTime);
+      reset =
+        t().resetsIn + ": " + countdown + (clock ? " (" + clock + ")" : "");
+    }
     return (
-      <>
-        <text>
-          <span style={{ fg: pal().info }}>{label}</span>
-          <Show when={hasUsedTotal}>
-            <span style={{ fg: pal().accent }}>
-              {" ".repeat(line1Gap) + usedTotal}
-            </span>
-          </Show>
-        </text>
-        <text>
-          <span style={{ fg: color }}>[{bar}]</span>
-          <span style={{ fg: pal().accent }}>{" ".repeat(BAR_GAP) + pct}</span>
-        </text>
-        <Show when={resetTime !== null}>
-          <text>
-            <span style={{ fg: pal().muted }}>
-              {t().resetsIn + ": " + countdown}
-            </span>
-            <Show when={clock}>
-              <span style={{ fg: dimColor(pal().muted, 0.75) }}>
-                {" (" + clock + ")"}
-              </span>
-            </Show>
-          </text>
-        </Show>
-      </>
+      <QuotaBar
+        title={label}
+        bar={bar}
+        resetTime={reset}
+        width={panelWidth() - gutter()}
+        palette={pal()}
+      />
     );
   }
 
