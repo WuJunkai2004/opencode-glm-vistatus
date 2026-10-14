@@ -20,6 +20,7 @@ import {
   onMount,
   onCleanup,
   Show,
+  For,
 } from "solid-js";
 import { PLUGIN_VERSION } from "../_version";
 
@@ -33,6 +34,13 @@ import {
   coordinateFetch,
   type SharedQuotaRecord,
 } from "../utils/shared-record";
+import {
+  fetchProviderQuota,
+  EXTERNAL_RECORD_POLL_MS,
+  EXTERNAL_FAILURE_BACKOFF_MS,
+  type ExternalQuotaRecord,
+  type QuotaRpcClient,
+} from "../utils/provider-quota";
 import { parseQuotaData, type ParsedQuota } from "../utils/quota-parser";
 import { getPlatformName } from "../api/platforms";
 import {
@@ -43,8 +51,8 @@ import {
   formatClockShort,
 } from "../utils/format";
 import { visualWidth, truncateVisual } from "./widgets";
-import { QuotaBar } from "./quota-block";
 import { buildPalette, dimColor, quotaColor, type ThemePalette } from "./theme";
+import { QuotaBar, parseBarPercent } from "./quota-block";
 import { getTranslations, type Translations } from "./i18n";
 
 // ---------------------------------------------------------------------------
@@ -107,6 +115,55 @@ export interface PanelSignals {
   setRefreshIntervalMin: (v: number) => void;
   forceRefresh: () => number;
   setForceRefresh: (v: number) => void;
+  externalRecord?: () => ExternalQuotaRecord | null;
+}
+
+/**
+ * Probe the host RPC channel for the selected provider's quota snapshot.
+ * Component-scope helper (needs a Solid owner for the effect + onCleanup):
+ * re-probes on a provider switch and every EXTERNAL_RECORD_POLL_MS; after
+ * a failed probe (no such RPC, provider offline) THAT provider backs off
+ * for EXTERNAL_FAILURE_BACKOFF_MS while others keep probing. A stale
+ * in-flight response is discarded via an epoch guard, and a provider
+ * switch resets the probe immediately. The V2 gate owns the single
+ * instance and passes it down through `signals`.
+ */
+export function createExternalRecordTrack(
+  currentProvider: () => string | undefined,
+  client: QuotaRpcClient | undefined,
+): () => ExternalQuotaRecord | null {
+  const [record, setRecord] = createSignal<ExternalQuotaRecord | null>(null);
+  let epoch = 0;
+  // Per-provider backoff state: only the id that failed is skipped until
+  // its window expires, so switching providers probes immediately.
+  let failFor: string | null = null;
+  let failAt = 0;
+  const probe = async () => {
+    const id = currentProvider()?.trim().toLowerCase();
+    if (!id) {
+      epoch++;
+      setRecord(null);
+      return;
+    }
+    if (failFor === id && Date.now() - failAt < EXTERNAL_FAILURE_BACKOFF_MS) {
+      return;
+    }
+    const seq = ++epoch;
+    const rec = await fetchProviderQuota(client, id);
+    if (seq !== epoch) return; // provider switched mid-flight
+    if (rec === null) {
+      failFor = id;
+      failAt = Date.now();
+    }
+    setRecord(rec);
+  };
+  createEffect(() => {
+    currentProvider();
+    void probe();
+  });
+  const timer = setInterval(() => void probe(), EXTERNAL_RECORD_POLL_MS);
+  onCleanup(() => clearInterval(timer));
+  return record;
 }
 
 // ---------------------------------------------------------------------------
@@ -350,11 +407,38 @@ export function GlmQuotaPanel(props: {
     );
   };
 
-  // ── Folded header percentage (5h usage) ──
+  // ── External provider record (V2 data protocol; V1 → always null) ────
+  // Non-null → the panel switches its data source: header shows the
+  // provider's label, GLM-specific lines are suppressed and the record's
+  // groups render through the same QuotaBar base.
+  const extRec = createMemo(() => props.signals.externalRecord?.() ?? null);
+
+  // ── Folded header percentage (5h usage; first group for external) ──
+  const foldedPctValue = createMemo(() => {
+    const e = extRec();
+    if (e) return parseBarPercent(e.groups[0]?.bar ?? "") ?? 0;
+    return quotaData()?.fiveHour?.percentage ?? 0;
+  });
   const foldedPct = createMemo(() => {
+    const e = extRec();
+    if (e) {
+      const pct = parseBarPercent(e.groups[0]?.bar ?? "");
+      return pct === null ? "" : formatPercentage(pct);
+    }
     const d = quotaData();
     if (!d?.fiveHour) return "";
     return formatPercentage(d.fiveHour.percentage);
+  });
+
+  // Header text/clock switch with the data source ("GLM 额度" vs "<label> 额度").
+  const headerTitle = createMemo(() => {
+    const e = extRec();
+    return e ? `${e.label} ${t().quotaSuffix}` : t().title;
+  });
+  const headerClock = createMemo<Date | null>(() => {
+    const e = extRec();
+    if (e) return new Date(e.ts);
+    return lastUpdate();
   });
 
   // Resync panel width after border toggle
@@ -432,7 +516,7 @@ export function GlmQuotaPanel(props: {
           {open() ? "\u25bc " : "\u25b6 "}
         </span>
         <span style={{ fg: pal().primary }}>
-          <b>{t().title}</b>
+          <b>{headerTitle()}</b>
           <Show when={open()}>
             <span style={{ fg: dimColor(pal().muted, 0.6) }}>
               {" "}
@@ -441,7 +525,7 @@ export function GlmQuotaPanel(props: {
           </Show>
         </span>
         {/* Expanded: show last update time right-aligned */}
-        <Show when={open() && lastUpdate()}>
+        <Show when={open() && headerClock()}>
           <span style={{ fg: dimColor(pal().muted, 0.7) }}>
             {" ".repeat(
               Math.max(
@@ -449,11 +533,11 @@ export function GlmQuotaPanel(props: {
                 panelWidth() -
                   gutter() -
                   HEADER_PREFIX -
-                  visualWidth(t().title) -
+                  visualWidth(headerTitle()) -
                   visualWidth(" v" + PLUGIN_VERSION) -
-                  visualWidth(formatClockShort(lastUpdate()!)),
+                  visualWidth(formatClockShort(headerClock()!)),
               ),
-            ) + formatClockShort(lastUpdate()!)}
+            ) + formatClockShort(headerClock()!)}
           </span>
         </Show>
         {/* Folded: show 5h usage percentage */}
@@ -465,16 +549,12 @@ export function GlmQuotaPanel(props: {
                 panelWidth() -
                   gutter() -
                   HEADER_PREFIX -
-                  visualWidth(t().title) -
+                  visualWidth(headerTitle()) -
                   visualWidth(foldedPct() + " " + t().collapsed),
               ),
             )}
           </span>
-          <span
-            style={{
-              fg: quotaColor(quotaData()?.fiveHour?.percentage ?? 0, pal()),
-            }}
-          >
+          <span style={{ fg: quotaColor(foldedPctValue(), pal()) }}>
             {foldedPct()} {t().collapsed}
           </span>
         </Show>
@@ -484,18 +564,35 @@ export function GlmQuotaPanel(props: {
         {/* Separator */}
         <text fg={pal().muted}>{sep()}</text>
 
+        {/* External provider record: data source follows the selected
+            provider. Groups render through the same QuotaBar base; title
+            and resetTime are display-ready (the writer owns i18n). */}
+        <Show when={extRec()}>
+          <For each={extRec()!.groups}>
+            {(g) => (
+              <QuotaBar
+                title={g.title}
+                bar={g.bar}
+                resetTime={g.resetTime ?? null}
+                width={panelWidth() - gutter()}
+                palette={pal()}
+              />
+            )}
+          </For>
+        </Show>
+
         {/* Platform info */}
-        <Show when={platformName()}>
+        <Show when={!extRec() && platformName()}>
           {labeledValue(t().platform + ":", platformName())}
         </Show>
 
         {/* Plan level */}
-        <Show when={quotaData()?.level}>
+        <Show when={!extRec() && quotaData()?.level}>
           {labeledValue(t().plan + ":", quotaData()!.level!)}
         </Show>
 
         {/* Loading state */}
-        <Show when={loading() && !quotaData() && !error()}>
+        <Show when={!extRec() && loading() && !quotaData() && !error()}>
           <text>
             <span style={{ fg: pal().muted }}>{"> "}</span>
             <span style={{ fg: pal().muted }}>{t().refreshing}</span>
@@ -503,7 +600,7 @@ export function GlmQuotaPanel(props: {
         </Show>
 
         {/* Error state */}
-        <Show when={error()}>
+        <Show when={!extRec() && error()}>
           <text>
             <span style={{ fg: pal().error }}>{"\u26a0 " + t().error}</span>
           </text>
@@ -518,7 +615,7 @@ export function GlmQuotaPanel(props: {
         </Show>
 
         {/* No data (not loading, not error, no quota) */}
-        <Show when={!loading() && !error() && !quotaData()}>
+        <Show when={!extRec() && !loading() && !error() && !quotaData()}>
           <text>
             <span style={{ fg: pal().muted }}>{"> "}</span>
             <span style={{ fg: pal().muted }}>{t().noData}</span>
@@ -526,7 +623,7 @@ export function GlmQuotaPanel(props: {
         </Show>
 
         {/* Quota data */}
-        <Show when={quotaData()}>
+        <Show when={!extRec() && quotaData()}>
           {/* 5h Token */}
           <Show when={quotaData()!.fiveHour}>
             {(() => {

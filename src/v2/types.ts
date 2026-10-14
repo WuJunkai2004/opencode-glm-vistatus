@@ -81,6 +81,7 @@ export interface Context {
   readonly options: Record<string, any>;
   readonly location: { readonly directory?: string } | undefined;
   readonly theme: Theme;
+  readonly client?: import("../utils/provider-quota").QuotaRpcClient;
   readonly storage: {
     store<Value extends object>(
       key: string,
@@ -89,6 +90,15 @@ export interface Context {
   };
   readonly ui: {
     slot(claim: SlotClaim): () => void;
+    readonly model?: {
+      current?():
+        | {
+            readonly providerID: string;
+            readonly modelID: string;
+            readonly variant?: string;
+          }
+        | undefined;
+    };
     readonly toast: {
       show(options: {
         readonly message: string;
