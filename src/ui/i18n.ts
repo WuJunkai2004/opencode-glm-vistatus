@@ -197,6 +197,9 @@ export interface SettingsI18n {
   menuLang: string;
   menuBorder: string;
   menuInterval: (cur: string) => string;
+  menuVisibility: string;
+  visibilityAlways: string;
+  visibilityMatched: string;
   menuDone: string;
   intervalTitle: string;
   intervalPresets: { label: string; minutes: number }[];
@@ -221,6 +224,9 @@ const ZH_SETTINGS: SettingsI18n = {
   menuLang: "显示语言",
   menuBorder: "面板边框",
   menuInterval: (cur) => `刷新间隔  ·  当前 ${cur}`,
+  menuVisibility: "显示条件",
+  visibilityAlways: "始终显示",
+  visibilityMatched: "按当前供应商显示",
   menuDone: "完成",
   intervalTitle: "选择刷新间隔",
   intervalPresets: [
@@ -248,6 +254,9 @@ const EN_SETTINGS: SettingsI18n = {
   menuLang: "Display Language",
   menuBorder: "Panel Border",
   menuInterval: (cur) => `Refresh Interval  ·  current ${cur}`,
+  menuVisibility: "Panel Visibility",
+  visibilityAlways: "Always show",
+  visibilityMatched: "Only when provider matches",
   menuDone: "Done",
   intervalTitle: "Select Refresh Interval",
   intervalPresets: [

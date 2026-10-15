@@ -18,7 +18,7 @@ import { createRequire } from "node:module";
 import type { Platform } from "../api/endpoints";
 import { detectPlatform } from "../api/platforms";
 
-const CANDIDATE_PROVIDER_IDS = [
+export const CANDIDATE_PROVIDER_IDS = [
   "zhipuai-coding-plan",
   "zai-coding-plan",
   "zai",

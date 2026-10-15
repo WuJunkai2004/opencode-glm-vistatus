@@ -29,7 +29,11 @@ import {
   diffMcpSelection,
   type ToastPort,
 } from "../utils/mcp-manage";
-import { getInstalledGlmMcp, GLM_MCP_SERVER_NAMES, type Scope } from "../utils/mcp-servers";
+import {
+  getInstalledGlmMcp,
+  GLM_MCP_SERVER_NAMES,
+  type Scope,
+} from "../utils/mcp-servers";
 
 export interface CommandHost {
   context: Context;
@@ -66,6 +70,14 @@ async function runSettingsMenu(host: CommandHost): Promise<void> {
           ),
           value: "interval",
         },
+        {
+          title: `${t().menuVisibility}  [${
+            signals.providerFilter()
+              ? t().visibilityMatched
+              : t().visibilityAlways
+          }]`,
+          value: "visibility",
+        },
         { title: t().menuDone, value: "__done" },
       ],
     });
@@ -100,6 +112,27 @@ async function runSettingsMenu(host: CommandHost): Promise<void> {
         const on = onOff === "on";
         await kv.set(`${KV}.border`, on);
         signals.setBorderVisible(on);
+      }
+    } else if (pick === "visibility") {
+      const filtering = signals.providerFilter();
+      const mode = await context.ui.dialog.select<string>({
+        title: t().menuVisibility,
+        options: [
+          {
+            title: `${t().visibilityAlways}  ${!filtering ? "\u2713" : ""}`,
+            value: "always",
+          },
+          {
+            title: `${t().visibilityMatched}  ${filtering ? "\u2713" : ""}`,
+            value: "matched",
+          },
+        ],
+        current: filtering ? "matched" : "always",
+      });
+      if (mode === "always" || mode === "matched") {
+        const on = mode === "matched";
+        await kv.set(`${KV}.providerFilter`, on);
+        signals.setProviderFilter(on);
       }
     } else if (pick === "interval") {
       const cur = signals.refreshIntervalMin();
@@ -248,8 +281,7 @@ export function makeCommands(host: CommandHost): KeymapCommand[] {
     {
       id: "opencode-glm-vistatus.glm.config",
       title: "GLM: Settings",
-      description:
-        "Open plugin settings (language / border / refresh interval)",
+      description: "Open glm plugin's settings",
       group: "GLM",
       palette: true,
       slash: { name: "glm-config" },

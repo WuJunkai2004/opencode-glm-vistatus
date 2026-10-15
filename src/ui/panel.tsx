@@ -115,6 +115,10 @@ export interface PanelSignals {
   setRefreshIntervalMin: (v: number) => void;
   forceRefresh: () => number;
   setForceRefresh: (v: number) => void;
+  providerFilter: () => boolean;
+  setProviderFilter: (v: boolean) => void;
+  matchedProviders: () => readonly string[];
+  setMatchedProviders: (v: readonly string[]) => void;
   externalRecord?: () => ExternalQuotaRecord | null;
 }
 

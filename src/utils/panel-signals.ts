@@ -15,6 +15,7 @@ import {
   type KvAdapter,
   type PanelSignals,
 } from "../ui/panel";
+import { CANDIDATE_PROVIDER_IDS } from "./auth";
 
 /** Create the panel signals with defaults (language auto-detected). */
 export function createPanelSignals(): PanelSignals {
@@ -24,6 +25,10 @@ export function createPanelSignals(): PanelSignals {
     DEFAULT_REFRESH_INTERVAL_MIN,
   );
   const [forceRefresh, setForceRefresh] = createSignal(0);
+  const [providerFilter, setProviderFilter] = createSignal(false);
+  const [matchedProviders, setMatchedProviders] = createSignal<
+    readonly string[]
+  >(CANDIDATE_PROVIDER_IDS);
 
   return {
     langZH,
@@ -34,7 +39,27 @@ export function createPanelSignals(): PanelSignals {
     setRefreshIntervalMin,
     forceRefresh,
     setForceRefresh,
+    providerFilter,
+    setProviderFilter,
+    matchedProviders,
+    setMatchedProviders,
   };
+}
+
+/**
+ * Normalize a plugin-option provider list (`matchedProviders`) into the
+ * lowercase comparison form: strings only, trimmed, lowercased, deduped.
+ * Anything else (missing/wrong type/empty) falls back to the GLM
+ * credential IDs. Providers outside this plugin (atomcode, codearts, …)
+ * are added by user config — they are never hardcoded here.
+ */
+export function normalizeProviderList(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return CANDIDATE_PROVIDER_IDS;
+  const list = value
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.trim().toLowerCase())
+    .filter((v) => v.length > 0);
+  return list.length > 0 ? [...new Set(list)] : CANDIDATE_PROVIDER_IDS;
 }
 
 /** A persisted refresh interval must be a finite number within the bounds. */
@@ -58,5 +83,8 @@ export function restorePanelConfig(kv: KvAdapter, signals: PanelSignals): void {
     if (isValidInterval(savedInterval)) {
       signals.setRefreshIntervalMin(Math.round(savedInterval));
     }
+    signals.setProviderFilter(
+      kv.get<boolean>(`${KV}.providerFilter`, false) === true,
+    );
   } catch {}
 }
