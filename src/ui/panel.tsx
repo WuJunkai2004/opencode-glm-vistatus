@@ -800,7 +800,7 @@ export function GlmQuotaPanel(props: {
 
         {/* Quota data */}
         <Show when={showGlm() && quotaData()}>
-          {/* 5h Token */}
+          {/* 5h Token (z.ai) / 5h Quota (bigmodel.cn credit window) */}
           <Show when={quotaData()!.fiveHour}>
             {(() => {
               const q = quotaData()!.fiveHour!;
@@ -809,7 +809,7 @@ export function GlmQuotaPanel(props: {
                   ? Math.round((q.total * q.percentage) / 100)
                   : null;
               return renderQuotaBlock(
-                t().token5h,
+                q.credit ? t().token5hCredit : t().token5h,
                 q.percentage,
                 used,
                 q.total,
