@@ -103,8 +103,8 @@ async function runSettingsMenu(host: CommandHost): Promise<void> {
       const onOff = await context.ui.dialog.select<string>({
         title: t().menuBorder,
         options: [
-          { title: `${t().on}  ${!border ? "\u2713" : ""}`, value: "on" },
-          { title: `${t().off}  ${border ? "\u2713" : ""}`, value: "off" },
+          { title: `${t().on}  ${border ? "\u2713" : ""}`, value: "on" },
+          { title: `${t().off}  ${!border ? "\u2713" : ""}`, value: "off" },
         ],
         current: border ? "on" : "off",
       });

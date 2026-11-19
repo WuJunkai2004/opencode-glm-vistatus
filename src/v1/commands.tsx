@@ -124,11 +124,11 @@ export function buildV1Commands(
               title={si18n.menuBorder}
               options={[
                 {
-                  title: `${si18n.on}  ${!border ? "\u2713" : ""}`,
+                  title: `${si18n.on}  ${border ? "\u2713" : ""}`,
                   value: "on",
                 },
                 {
-                  title: `${si18n.off}  ${border ? "\u2713" : ""}`,
+                  title: `${si18n.off}  ${!border ? "\u2713" : ""}`,
                   value: "off",
                 },
               ]}
