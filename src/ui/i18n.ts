@@ -23,6 +23,8 @@ export interface Translations {
   errorPrefix: string;
   collapse: string;
   collapsed: string;
+  pinOffline: string;
+  pinUnknown: string;
 }
 
 const ZH_T: Translations = {
@@ -45,6 +47,8 @@ const ZH_T: Translations = {
   errorPrefix: "错误",
   collapse: "折叠",
   collapsed: "已用",
+  pinOffline: "来源未应答，插件可能未运行",
+  pinUnknown: "尚未发现该来源的额度插件",
 };
 
 const EN_T: Translations = {
@@ -67,6 +71,8 @@ const EN_T: Translations = {
   errorPrefix: "Error",
   collapse: "Collapse",
   collapsed: "used",
+  pinOffline: "Source not responding — plugin may not be running",
+  pinUnknown: "No quota plugin discovered for this source yet",
 };
 
 export function getTranslations(langZH: boolean): Translations {
@@ -212,6 +218,8 @@ export interface SettingsI18n {
   off: string;
   minutes: (n: number) => string;
   cancel: string;
+  menuManualSource: string;
+  manualSourceNone: string;
 }
 
 export function formatIntervalLabel(minutes: number): string {
@@ -247,6 +255,8 @@ const ZH_SETTINGS: SettingsI18n = {
   off: "关",
   minutes: (n) => `${n} 分钟`,
   cancel: "取消",
+  menuManualSource: "手动切换供应商",
+  manualSourceNone: "无其他查询来源",
 };
 
 const EN_SETTINGS: SettingsI18n = {
@@ -277,6 +287,8 @@ const EN_SETTINGS: SettingsI18n = {
   off: "OFF",
   minutes: (n) => `${n} minute${n === 1 ? "" : "s"}`,
   cancel: "Cancel",
+  menuManualSource: "Manual Provider Switch",
+  manualSourceNone: "No other quota sources discovered",
 };
 
 export function getSettingsTranslations(langZH: boolean): SettingsI18n {
