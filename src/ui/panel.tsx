@@ -119,8 +119,45 @@ export interface PanelSignals {
   setProviderFilter: (v: boolean) => void;
   matchedProviders: () => readonly string[];
   setMatchedProviders: (v: readonly string[]) => void;
+  /**
+   * Pinned quota source: null = auto-follow the selected provider,
+   * otherwise a lowercased provider id whose plugin serves the quota RPC.
+   * The legacy value "glm" (old KV entries only, never written anymore)
+   * is handled as auto-follow by the gate (probe target) and this panel
+   * (renders identically to null). Persisted as `${KV}.pin`; only
+   * honored while `manualSource` is on. The V2 gate maps it to the probe
+   * target (V1 has no gate/rpc surface and simply ignores it).
+   */
+  pinProvider: () => string | null;
+  setPinProvider: (v: string | null) => void;
+  /**
+   * Master switch for manual source switching, default off. While off the
+   * panel behaves exactly as before (auto-follow, plain platform row) and
+   * any stored pin is ignored — both by the gate (probe target and
+   * visibility) and by the panel renderer.
+   */
+  manualSource: () => boolean;
+  setManualSource: (v: boolean) => void;
+  /** V2 only: live snapshot for the probe target (see the V2 gate). */
   externalRecord?: () => ExternalQuotaRecord | null;
 }
+
+/** One learned quota source (an entry of the switcher's cycle list). */
+export interface PinCandidate {
+  id: string;
+  /** Display label from the RPC snapshot, falling back to the raw id. */
+  label: string;
+}
+
+/**
+ * Learned quota-RPC sources: id → { label, discovery ts }. Written only by
+ * the V2 gate (`learnSource`); ts exists solely to keep the cycle order
+ * stable across restarts. The panel and /glm-config read this KV key
+ * directly — reactive on V2, whose `kv.get` goes through per-key Solid
+ * stores. V1 never writes it → empty list → plain platform row.
+ */
+export type SourceMap = Record<string, { label: string; ts: number }>;
+export const SOURCES_KEY = `${KV}.quotaSources`;
 
 /**
  * Probe the host RPC channel for the selected provider's quota snapshot.
@@ -162,8 +199,16 @@ export function createExternalRecordTrack(
     setRecord(rec);
   };
   createEffect(() => {
-    currentProvider();
+    const target = currentProvider()?.trim().toLowerCase();
     void probe();
+    // Drop a snapshot that belongs to a previous target immediately, so
+    // the display follows the switch without waiting for the probe round
+    // trip — and stays cleared even while a failed target is in backoff
+    // (whose early-return would otherwise leave the old record up, e.g.
+    // pinning back to auto after watching an external source).
+    setRecord((r) =>
+      r && r.provider !== (target ?? "") ? null : r,
+    );
   });
   const timer = setInterval(() => void probe(), EXTERNAL_RECORD_POLL_MS);
   onCleanup(() => clearInterval(timer));
@@ -417,10 +462,105 @@ export function GlmQuotaPanel(props: {
   // groups render through the same QuotaBar base.
   const extRec = createMemo(() => props.signals.externalRecord?.() ?? null);
 
+  // ── Pinned source state (sidebar source switcher) ─────────────────────
+  // Effective pin: null unless manual switching is on (master switch, the
+  // off state reproduces the pre-feature panel exactly). An external
+  // provider id pins the data source without touching the prompt's model
+  // selection; the legacy "glm" value (old KV entries only) renders
+  // identically to null. The switcher row renders only when learned
+  // sources exist (V2 gate) and the master switch is on. The pin signal
+  // is normalized once at restore (`normalizePin`) and only ever written
+  // with normalized values, so it is trusted as-is here.
+  const pinValue = createMemo(() => {
+    if (!props.signals.manualSource()) return null;
+    return props.signals.pinProvider();
+  });
+  const pinnedExt = createMemo(() => !!pinValue() && pinValue() !== "glm");
+  /** GLM-specific sections render only when no external snapshot is up
+   *  AND the user has not pinned an external source (pin wins over the
+   *  silent fall-back to GLM data — otherwise a pinned-but-empty source
+   *  would misleadingly show GLM numbers). */
+  const showGlm = createMemo(() => !extRec() && !pinnedExt());
+  /** Cycle list: learned sources, oldest discovery first for a stable
+   *  order. Reactive on V2 (kv.get reads a Solid store); empty on V1.
+   *  Declared before `switchable`, which reads it during the eager first
+   *  memo computation. */
+  const candList = createMemo<PinCandidate[]>(() => {
+    const learned = props.kv.get<SourceMap>(SOURCES_KEY) ?? {};
+    return Object.entries(learned)
+      .sort((a, b) => a[1].ts - b[1].ts)
+      .map(([id, v]) => ({ id, label: v.label || id }));
+  });
+  const switchable = createMemo(
+    () => props.signals.manualSource() && candList().length > 0,
+  );
+
+  /** Label for the pinned/active source (used by the header title and the
+   *  platform row value when a pinned external source has no data yet). */
+  const sourceLabel = createMemo<string>(() => {
+    const p = pinValue();
+    if (p === "glm") return platformName() || "GLM";
+    const c = candList().find((x) => x.id === p);
+    return c?.label || p || platformName() || "GLM";
+  });
+
+  /**
+   * Value of the platform row — doubles as the source switcher on V2:
+   * the live external label, the pinned source, or the GLM credential
+   * platform, in that order.
+   */
+  const platformValue = createMemo<string>(() => {
+    const e = extRec();
+    if (e) return e.label;
+    return sourceLabel();
+  });
+
+  /** Hint under the pinned-but-empty state, or null when not applicable. */
+  const pinEmptyHint = createMemo<string | null>(() => {
+    if (!pinnedExt() || extRec()) return null;
+    const c = candList().find((x) => x.id === pinValue());
+    return c ? t().pinOffline : t().pinUnknown;
+  });
+
+  /** Cycle the pinned source: auto → discovered providers → auto. Every
+   *  state is visually distinct (the GLM view IS the auto state when a
+   *  GLM model is selected). Persisted via `${KV}.pin`. */
+  const cycleSource = () => {
+    const cands = candList();
+    const order: (string | null)[] = [null, ...cands.map((c) => c.id)];
+    const cur = pinValue();
+    const idx = order.findIndex((o) => (o ?? null) === cur);
+    const next = order[(idx + 1) % order.length] ?? null;
+    try {
+      void props.kv.set(`${KV}.pin`, next);
+    } catch {}
+    props.signals.setPinProvider(next);
+  };
+
+  // ── Source-switcher row values (ALL memoized — Solid component bodies
+  // run once, so plain consts here would freeze at mount) ──
+  const rowLabel = createMemo(() => t().platform + ":");
+  const rowValue = createMemo(() => {
+    // Reserve: " ▶" next-hint (2 cols) + min gap (1) + margin (1).
+    const max = Math.max(
+      4,
+      panelWidth() - gutter() - visualWidth(rowLabel()) - 4,
+    );
+    return truncateVisual(platformValue(), max);
+  });
+  const rowGap = createMemo(() => {
+    const group = rowValue() + " \u25b6";
+    return Math.max(
+      1,
+      panelWidth() - gutter() - visualWidth(rowLabel()) - visualWidth(group),
+    );
+  });
+
   // ── Folded header percentage (5h usage; first group for external) ──
   const foldedPctValue = createMemo(() => {
     const e = extRec();
     if (e) return parseBarPercent(e.groups[0]?.bar ?? "") ?? 0;
+    if (pinnedExt()) return 0;
     return quotaData()?.fiveHour?.percentage ?? 0;
   });
   const foldedPct = createMemo(() => {
@@ -429,6 +569,7 @@ export function GlmQuotaPanel(props: {
       const pct = parseBarPercent(e.groups[0]?.bar ?? "");
       return pct === null ? "" : formatPercentage(pct);
     }
+    if (pinnedExt()) return "";
     const d = quotaData();
     if (!d?.fiveHour) return "";
     return formatPercentage(d.fiveHour.percentage);
@@ -437,11 +578,14 @@ export function GlmQuotaPanel(props: {
   // Header text/clock switch with the data source ("GLM 额度" vs "<label> 额度").
   const headerTitle = createMemo(() => {
     const e = extRec();
-    return e ? `${e.label} ${t().quotaSuffix}` : t().title;
+    if (e) return `${e.label} ${t().quotaSuffix}`;
+    if (pinnedExt()) return `${sourceLabel()} ${t().quotaSuffix}`;
+    return t().title;
   });
   const headerClock = createMemo<Date | null>(() => {
     const e = extRec();
     if (e) return new Date(e.ts);
+    if (pinnedExt()) return null;
     return lastUpdate();
   });
 
@@ -568,9 +712,33 @@ export function GlmQuotaPanel(props: {
         {/* Separator */}
         <text fg={pal().muted}>{sep()}</text>
 
+        {/* Platform row — with manual switching on (V2), the value shows
+            the active source followed by a single ▶ next-hint. The
+            onMouseUp handler sits on the enclosing <text> — the hit-test
+            unit — so the WHOLE row (label, gap, value, triangle) is one
+            click target advancing to the next source (auto → discovered
+            providers → auto). Off or V1: the plain platform line,
+            exactly as before. */}
+        <Show
+          when={switchable()}
+          fallback={
+            <Show when={showGlm() && platformName()}>
+              {labeledValue(t().platform + ":", platformName())}
+            </Show>
+          }
+        >
+          <text onMouseUp={cycleSource}>
+            <span style={{ fg: pal().info }}>{rowLabel()}</span>
+            <span style={{ fg: pal().muted }}>{" ".repeat(rowGap())}</span>
+            <span style={{ fg: pal().accent }}>{rowValue()}</span>
+            <span style={{ fg: pal().muted }}>{" \u25b6"}</span>
+          </text>
+        </Show>
+
         {/* External provider record: data source follows the selected
-            provider. Groups render through the same QuotaBar base; title
-            and resetTime are display-ready (the writer owns i18n). */}
+            provider, or the pinned source when set. Groups render through
+            the same QuotaBar base; title and resetTime are display-ready
+            (the writer owns i18n). */}
         <Show when={extRec()}>
           <For each={extRec()!.groups}>
             {(g) => (
@@ -585,18 +753,22 @@ export function GlmQuotaPanel(props: {
           </For>
         </Show>
 
-        {/* Platform info */}
-        <Show when={!extRec() && platformName()}>
-          {labeledValue(t().platform + ":", platformName())}
+        {/* Pinned external source with no snapshot: say so instead of
+            silently falling back to GLM data. */}
+        <Show when={pinEmptyHint()}>
+          <text>
+            <span style={{ fg: pal().muted }}>{"> "}</span>
+            <span style={{ fg: pal().muted }}>{pinEmptyHint()}</span>
+          </text>
         </Show>
 
         {/* Plan level */}
-        <Show when={!extRec() && quotaData()?.level}>
+        <Show when={showGlm() && quotaData()?.level}>
           {labeledValue(t().plan + ":", quotaData()!.level!)}
         </Show>
 
         {/* Loading state */}
-        <Show when={!extRec() && loading() && !quotaData() && !error()}>
+        <Show when={showGlm() && loading() && !quotaData() && !error()}>
           <text>
             <span style={{ fg: pal().muted }}>{"> "}</span>
             <span style={{ fg: pal().muted }}>{t().refreshing}</span>
@@ -604,7 +776,7 @@ export function GlmQuotaPanel(props: {
         </Show>
 
         {/* Error state */}
-        <Show when={!extRec() && error()}>
+        <Show when={showGlm() && error()}>
           <text>
             <span style={{ fg: pal().error }}>{"\u26a0 " + t().error}</span>
           </text>
@@ -619,7 +791,7 @@ export function GlmQuotaPanel(props: {
         </Show>
 
         {/* No data (not loading, not error, no quota) */}
-        <Show when={!extRec() && !loading() && !error() && !quotaData()}>
+        <Show when={showGlm() && !loading() && !error() && !quotaData()}>
           <text>
             <span style={{ fg: pal().muted }}>{"> "}</span>
             <span style={{ fg: pal().muted }}>{t().noData}</span>
@@ -627,7 +799,7 @@ export function GlmQuotaPanel(props: {
         </Show>
 
         {/* Quota data */}
-        <Show when={!extRec() && quotaData()}>
+        <Show when={showGlm() && quotaData()}>
           {/* 5h Token */}
           <Show when={quotaData()!.fiveHour}>
             {(() => {

@@ -29,6 +29,8 @@ export function createPanelSignals(): PanelSignals {
   const [matchedProviders, setMatchedProviders] = createSignal<
     readonly string[]
   >(CANDIDATE_PROVIDER_IDS);
+  const [pinProvider, setPinProvider] = createSignal<string | null>(null);
+  const [manualSource, setManualSource] = createSignal(false);
 
   return {
     langZH,
@@ -43,7 +45,27 @@ export function createPanelSignals(): PanelSignals {
     setProviderFilter,
     matchedProviders,
     setMatchedProviders,
+    pinProvider,
+    setPinProvider,
+    manualSource,
+    setManualSource,
   };
+}
+
+/**
+ * Normalize a pinned quota-source value: `null` = auto-follow the selected
+ * provider, anything else is a lowercased provider id (≤ 48 chars, no
+ * whitespace). The legacy value `"glm"` stays valid purely for backward
+ * compatibility with old KV entries — it is never written anymore, and the
+ * gate/panel consume it as auto-follow (see the V2 gate). Garbage → null
+ * so a corrupted KV entry can never wedge the switcher.
+ */
+export function normalizePin(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const v = value.trim().toLowerCase();
+  if (!v) return null;
+  if (v === "glm") return "glm";
+  return v.length <= 48 && !/\s/.test(v) ? v : null;
 }
 
 /**
@@ -86,5 +108,7 @@ export function restorePanelConfig(kv: KvAdapter, signals: PanelSignals): void {
     signals.setProviderFilter(
       kv.get<boolean>(`${KV}.providerFilter`, false) === true,
     );
+    signals.setPinProvider(normalizePin(kv.get<unknown>(`${KV}.pin`)));
+    signals.setManualSource(kv.get<boolean>(`${KV}.manualSource`, false) === true);
   } catch {}
 }

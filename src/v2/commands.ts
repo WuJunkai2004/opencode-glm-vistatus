@@ -15,8 +15,10 @@ import type { Context, KeymapCommand } from "./types";
 import type { KvAdapter, PanelSignals } from "../ui/panel";
 import {
   KV,
+  SOURCES_KEY,
   MIN_REFRESH_INTERVAL_MIN,
   MAX_REFRESH_INTERVAL_MIN,
+  type SourceMap,
 } from "../ui/panel";
 import {
   getSettingsTranslations,
@@ -53,6 +55,7 @@ async function runSettingsMenu(host: CommandHost): Promise<void> {
 
   for (;;) {
     const border = Boolean(kv.get(`${KV}.border`, true));
+    const manual = kv.get<boolean>(`${KV}.manualSource`, false) === true;
     const pick = await context.ui.dialog.select<string>({
       title: t().menuTitle,
       options: [
@@ -77,6 +80,10 @@ async function runSettingsMenu(host: CommandHost): Promise<void> {
               : t().visibilityAlways
           }]`,
           value: "visibility",
+        },
+        {
+          title: `${t().menuManualSource}  [${manual ? t().on : t().off}]`,
+          value: "manualSource",
         },
         { title: t().menuDone, value: "__done" },
       ],
@@ -133,6 +140,29 @@ async function runSettingsMenu(host: CommandHost): Promise<void> {
         const on = mode === "matched";
         await kv.set(`${KV}.providerFilter`, on);
         signals.setProviderFilter(on);
+      }
+    } else if (pick === "manualSource") {
+      const onOff = await context.ui.dialog.select<string>({
+        title: t().menuManualSource,
+        options: [
+          { title: `${t().on}  ${manual ? "\u2713" : ""}`, value: "on" },
+          { title: `${t().off}  ${!manual ? "\u2713" : ""}`, value: "off" },
+        ],
+        current: manual ? "on" : "off",
+      });
+      if (onOff === "on" || onOff === "off") {
+        const on = onOff === "on";
+        // Refuse to enable when no external quota source has been
+        // discovered — there would be nothing to switch to.
+        if (on && !Object.keys(kv.get<SourceMap>(SOURCES_KEY) ?? {}).length) {
+          context.ui.toast.show({
+            variant: "error",
+            message: t().manualSourceNone,
+          });
+          continue;
+        }
+        await kv.set(`${KV}.manualSource`, on);
+        signals.setManualSource(on);
       }
     } else if (pick === "interval") {
       const cur = signals.refreshIntervalMin();
