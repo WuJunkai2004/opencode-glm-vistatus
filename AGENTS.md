@@ -1,29 +1,26 @@
 # AGENTS.md
 
 OpenCode TUI plugin — real-time GLM Coding Plan quota in the sidebar.
+User-facing docs (install / slash commands / build steps) live in
+README.md（简体中文）/ README.en.md — this file is dev-facing only.
 
 ## Build & Development
 
-```bash
-npm install          # install dev deps only (runtime deps are host-provided)
-npm run build        # tsc --noEmit (typecheck) && esbuild bundle → dist/tui.js (the only artifact)
-npm run typecheck    # tsc --noEmit
-npm run build:tui    # esbuild bundle only (skips tsc)
-npm run inspect      # live API debug: fetches real quota data & prints each step (needs creds)
-```
-
-No test suite exists. Verify changes with `npm run typecheck && npm run build`.
+Beyond the README build block: `npm run build:tui` (esbuild bundle only, skips
+tsc), `npm run inspect` (live API debug: fetches real quota data & prints each
+step, needs creds). No test suite exists — verify changes with
+`npm run typecheck && npm run build`.
 
 ### Versioning: `VERSION.txt` is the single source of truth
 
-`VERSION.txt` (e.g. `0.1.0`) drives everything — never hand-edit `package.json`'s `version` directly. `npm run sync-version` copies `VERSION.txt` → `package.json` + `src/_version.ts` from it. `prepublishOnly` runs both automatically.
+Never hand-edit `package.json`'s `version` — `npm run sync-version` copies
+`VERSION.txt` → `package.json` + `src/_version.ts` (generated, gitignored,
+never hand-edit or commit it; the bundle build fails without it).
+`prepublishOnly` runs sync-version + build, so npm publish never hits the
+missing-file issue.
 
-- `release.yml` (manual `workflow_dispatch`): bumps per rule (`minor+1, patch=0`; `minor>=10` rolls over to `major+1`), commits, tags `vX.Y.Z`, creates a GitHub Release. That VERSION.txt commit then triggers `publish.yml`.
-- `publish.yml`: fires on any `VERSION.txt` change on `main` → syncs, builds, `npm publish --provenance --access public`, commits the synced `package.json` back to `main`.
-
-### `src/_version.ts` is generated & gitignored
-
-`scripts/sync-version.mjs` auto-creates it from `package.json` if missing; without it the bundle build fails. Never hand-edit or commit it.
+- `release.yml` (manual `workflow_dispatch`): bumps per rule (`minor+1, patch=0`; `minor>=10` rolls over to `major+1`), syncs package.json AND package-lock.json (`npm install --package-lock-only`), commits, tags `vX.Y.Z`, creates a GitHub Release. That VERSION.txt commit then triggers `publish.yml`.
+- `publish.yml`: fires on any `VERSION.txt` change on `main` → syncs, builds, `npm publish --provenance --access public`, commits the synced `package.json` back to `main` (usually a no-op — release.yml already synced it).
 
 ## Build internals (matter when editing the bundler)
 
@@ -94,21 +91,19 @@ A **fresh TUI process** is required either way: a running TUI caches ESM by URL 
 - **Debug env**: `GLM_VISTATUS_LANG=zh|en` forces the UI language (bypasses auto-detection) for testing i18n.
 - **MCP config files**: `opencode.json` and `opencode.jsonc` are both legal (OpenCode merges them, jsonc wins). The picker unions `mcp` entries from both; installs write to the file already holding `mcp` (jsonc preferred), uninstalls delete the server from every file that declares it.
 
-## Slash commands (registered in `src/v1/commands.tsx` and `src/v2/commands.ts`)
+## Slash commands
 
-| Command           | Action                                                                       |
-| ----------------- | ---------------------------------------------------------------------------- |
-| `/glm-refresh`    | Force-refresh quota data immediately                                         |
-| `/glm-config`     | Interactive settings: language / border / refresh interval / visibility (V2) |
-| `/glm-mcp-manage` | Install / uninstall GLM MCP servers (alias: `/glm-mcp-install`)              |
-
-Language, border and refresh-interval preferences are persisted via plugin KV and survive restarts. Refresh interval: presets 1/2/5/10/30/60 min + custom (1–1440 min, validated in `/glm-config`), default 5 min, timer reschedules reactively when changed.
+The command table lives in README; registered in `src/v1/commands.tsx` +
+`src/v2/commands.ts`. Language / border / refresh-interval prefs persist via
+plugin KV and survive restarts; refresh interval presets 1/2/5/10/30/60 min +
+custom (1–1440 min, validated in `/glm-config`), default 5 min, timer
+reschedules reactively on change.
 
 ## Install / registration
 
-Users register the plugin by package spec and the host installs it from npm automatically:
-
-- **V2**: `cli.json` → `plugins: [{ package: "opencode-glm-vistatus" }]` — the OpenCode `install plugin` palette command edits this for you.
-- **V1**: `tui.jsonc` → `plugin: ["opencode-glm-vistatus"]`.
-
-There is no `bin` installer: `install.mjs` (the npx flow) was removed — it duplicated the host's own install command, and its entrypoint had silently been broken (strip-json-comments v5 named import) with no reports. Plugin spec is the bare string `"opencode-glm-vistatus"` (no `@latest`).
+User steps live in README (V2 `cli.json` `plugins` / V1 `tui.jsonc` `plugin`;
+the host's `install plugin` palette writes them). Dev-relevant facts: plugin
+spec is the bare string `"opencode-glm-vistatus"` (no `@latest`); NO `bin`
+installer — `install.mjs` (the npx flow) was removed (it duplicated the host's
+own install command and its entrypoint was silently broken:
+strip-json-comments v5 named import). Do not re-add.
