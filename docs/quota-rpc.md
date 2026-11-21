@@ -76,7 +76,7 @@ this provider" — the panel degrades, never throws.
 | `title`     | non-empty string, ≤ 48 chars      |
 | `bar`       | non-empty string, ≤ 64 chars      |
 | `value`     | non-empty string, ≤ 48 chars (label form) |
-| `resetTime` | optional string, ≤ 64 chars       |
+| `resetTime` | optional number, Unix epoch ms (> 0) |
 
 ---
 
@@ -91,7 +91,8 @@ method resolving to:
   groups: Array<
     | { title: string;           // BAR form — a quota window
         bar: string;             // "nn%" OR "xx/yy" — see below
-        resetTime?: string; }    // display-ready, e.g. "2h 30m"
+        resetTime?: number; }    // Unix epoch MILLISECONDS — the reader
+                                 // renders countdown + clock itself
     | { title: string;           // LABEL form — a metadata row (platform,
         value: string }          // plan level …): right-aligned key/value line
   >;
@@ -108,13 +109,18 @@ Rules that keep the integration seamless:
   unparseable `bar` renders as a neutral accent with an empty fill —
   it never throws.
 - **Label groups** render exactly like the sidebar's native metadata rows
-  (right-aligned key/value line, no bar). They postdate the bar form:
+  (right-aligned key/value line, no bar). The reader renders the title
+  with a trailing colon (`title:`) — send the bare name, no punctuation.
+  They postdate the bar form:
   bar-only readers reject snapshots containing them, so ship label groups
   only when your readers understand the form — for maximum compatibility,
-  stick to bars. (This panel's `./server` export uses label groups for its
-  platform/plan rows and is also the reference reader.)
-- **The writer owns i18n.** `title`, `value` and `resetTime` are
-  display-ready strings; the panel prints them verbatim.
+  stick to bars. (This panel's `./server` export uses a label group for its
+  plan row and is also the reference reader.)
+- **The writer owns i18n for text, the reader owns time.** `title` and
+  `value` are display-ready strings the panel prints verbatim.
+  `resetTime` is NOT formatted: send Unix epoch milliseconds and the
+  reader composes the countdown + clock/day line against its own "now"
+  (fresh on every render, in the reader's language).
 - **Degrade, don't throw.** Any failure (not logged in, upstream error,
   transport timeout) should resolve `{ label, groups: [] }` — or simply
   reject; either way the panel shows "no data" and the GLM view stays
@@ -175,7 +181,9 @@ sidebar is a **one-file server plugin** — no fork of this panel, no config:
 // my-provider-quota.ts — add "my-provider-quota" to opencode.jsonc "plugins"
 interface Snapshot {
   label: string;
-  groups: { title: string; bar: string; resetTime?: string }[];
+  // resetTime: Unix epoch MILLISECONDS — the reader renders the
+  // countdown + clock itself; never send formatted time strings.
+  groups: { title: string; bar: string; resetTime?: number }[];
 }
 
 export default function setup(ctx: { rpc?: { register?: Function } }) {
@@ -202,7 +210,7 @@ export default function setup(ctx: { rpc?: { register?: Function } }) {
           groups: [{
             title: "5h",
             bar: `${u.used}/${u.limit}`, // "12.4K/200K" — reader derives %
-            resetTime: u.resetAt,
+            resetTime: u.resetAt, // epoch ms — reader renders the line
           }],
         };
       } catch {
