@@ -41,7 +41,6 @@ import {
   normalizeProviderList,
   restorePanelConfig,
 } from "../utils/panel-signals";
-import { CANDIDATE_PROVIDER_IDS } from "../utils/auth";
 import {
   fetchProviderQuota,
   type ExternalQuotaRecord,
@@ -109,16 +108,26 @@ function ProviderGate(props: {
     props.signals.manualSource() ? props.signals.pinProvider() : null,
   );
 
-  const isGlmAlias = (id: string) =>
-    (CANDIDATE_PROVIDER_IDS as readonly string[]).includes(id);
-
-  /** Merge a confirmed source into the learned map (atomically on V2). */
+  /** Merge a confirmed source into the learned map (atomically on V2).
+   *  One entry per display label: a writer that answers several ids with
+   *  the same snapshot (this plugin's own ./server export registers one
+   *  RPC per GLM credential alias) collapses into a single cycle entry.
+   *  A generic rule — no id list to maintain, every writer equal. */
   const learnSource = (provider: string, label: string) => {
     try {
       const cur = props.kv.get<SourceMap>(SOURCES_KEY);
-      if (cur && cur[provider]?.label === label) return;
+      if (
+        cur &&
+        (cur[provider]?.label === label ||
+          Object.values(cur).some((v) => v.label === label))
+      ) {
+        return;
+      }
       void props.kv.update<void>(SOURCES_KEY, (c) => {
         const map = (typeof c === "object" && c !== null ? c : {}) as SourceMap;
+        if (Object.values(map).some((v) => v.label === label)) {
+          return { next: map, result: undefined };
+        }
         return {
           next: { ...map, [provider]: { label, ts: Date.now() } },
           result: undefined,
@@ -148,6 +157,13 @@ function ProviderGate(props: {
 
   // Mount-time discovery sweep: probe every provider the host lists once,
   // so sources are discoverable without being selected first.
+  // ── Discovery sweep (mount, once) ────────────────────────────────────
+  // Probes every host-listed provider id once; whatever answers
+  // `<id>.quota` joins the cycle list. No id is special-cased — sibling
+  // plugins and this plugin's own ./server export are equal. A provider
+  // hot-loaded after mount is picked up by passive learning the moment
+  // its model is selected (the gate probe then answers and teaches the
+  // id); restarting the TUI re-runs the sweep.
   onMount(() => {
     const known = new Set(
       Object.keys(props.kv.get<SourceMap>(SOURCES_KEY) ?? {}),
@@ -160,7 +176,6 @@ function ProviderGate(props: {
         !id ||
         seen.has(id) ||
         known.has(id) ||
-        isGlmAlias(id) ||
         id.length > 48 ||
         /\s/.test(id)
       ) {

@@ -58,7 +58,8 @@ export function formatResetCountdown(resetTime: number | null): string {
 
 /**
  * Format reset clock time from Unix millisecond timestamp.
- * Short: "17:34" (same day) or "Sat 13:48" (future days)
+ * Within 12h of now: "17:34" (time only); further out: "Sat 13:48"
+ * (weekday + time).
  */
 export function formatResetClock(resetTime: number | null): string {
   if (resetTime === null) return "";
@@ -70,12 +71,13 @@ export function formatResetClock(resetTime: number | null): string {
   const resetDate = new Date(resetTime);
   const hh = String(resetDate.getHours()).padStart(2, "0");
   const mm = String(resetDate.getMinutes()).padStart(2, "0");
+  const clock = `${hh}:${mm}`;
 
-  if (totalMinutes >= 24 * 60) {
-    return `${DAY_NAMES[resetDate.getDay()]} ${hh}:${mm}`;
+  if (totalMinutes >= 12 * 60) {
+    return `${DAY_NAMES[resetDate.getDay()]} ${clock}`;
   }
 
-  return `${hh}:${mm}`;
+  return clock;
 }
 
 /**

@@ -24,7 +24,7 @@ import {
 } from "solid-js";
 import { PLUGIN_VERSION } from "../_version";
 
-import { getCredentials } from "../utils/auth";
+import { CANDIDATE_PROVIDER_IDS, getCredentials } from "../utils/auth";
 import { fetchAllQuota } from "../api/client";
 import {
   SHARED_RECORD_KEY,
@@ -214,6 +214,52 @@ const DEFAULT_PANEL_WIDTH = 30;
 // Layout measurement constants (visual columns)
 const HEADER_PREFIX = 2; // "▼ " or "▶ "
 
+/** Compose the reset line from a raw timestamp — countdown vs now plus
+ * clock/day (weekday shown once the horizon exceeds 12h), e.g.
+ * "重置: 2h 30m (23:43)" / "重置: 4d 17h (Thu 16:03)".
+ * A past or absent timestamp renders no line. Shared by the GLM path
+ * and external records (whose wire carries raw `Time`). */
+function resetLineOf(
+  resetTime: number | null,
+  t: Translations,
+): string | null {
+  if (resetTime === null) return null;
+  const countdown = formatResetCountdown(resetTime);
+  if (countdown === "—") return null;
+  const clock = formatResetClock(resetTime);
+  return t.resetsIn + ": " + countdown + (clock ? " (" + clock + ")" : "");
+}
+
+/** Label row — accent title + bright value, right-aligned to `width`.
+ * The reader renders the colon (`title:`), so the wire carries bare
+ * names; the colon budgets one visual column in the alignment.
+ * A COMPONENT with memos, not a plain function call: Solid bodies run
+ * once, so the gap must re-derive from reactive props or the row
+ * freezes at whatever panelWidth() was at mount (the QuotaBar pitfall,
+ * label flavor — `panelWidth` starts at the default and only reaches
+ * its real value after the first layout). */
+function LabelRow(props: {
+  label: string;
+  value: string;
+  width: number;
+  palette: ThemePalette;
+}): JSX.Element {
+  const gap = createMemo(() =>
+    Math.max(
+      1,
+      props.width - visualWidth(props.label) - 1 - visualWidth(props.value),
+    ),
+  );
+  return (
+    <text>
+      <span style={{ fg: props.palette.info }}>{props.label + ":"}</span>
+      <span style={{ fg: props.palette.accent }}>
+        {" ".repeat(gap()) + props.value}
+      </span>
+    </text>
+  );
+}
+
 export function GlmQuotaPanel(props: {
   theme: TuiThemeCurrent;
   kv: KvAdapter;
@@ -270,16 +316,25 @@ export function GlmQuotaPanel(props: {
     normalizeRecord(props.kv.get<unknown>(`${KV}.${SHARED_RECORD_KEY}`));
 
   async function refresh(force = false) {
+    const creds = getCredentials();
+    if (!creds) {
+      setError(t().noCred);
+      return;
+    }
+
+    setPlatformName(getPlatformName(creds.platform));
+
+    // Fetch discipline (provider-agnostic): the direct GLM fetch only
+    // runs while the GLM view is actually displayed. Any live external
+    // snapshot — this plugin's own ./server export or a sibling's —
+    // suppresses it, so displayed data is never also fetched directly.
+    // When the GLM view returns (server quiet, pin cleared), the next
+    // tick fetches again.
+    if (!showGlm()) return;
+
     setLoading(true);
     setError(null);
     try {
-      const creds = getCredentials();
-      if (!creds) {
-        setError(t().noCred);
-        return;
-      }
-
-      setPlatformName(getPlatformName(creds.platform));
       const tokenHash = hashToken(creds.token);
 
       // Forced refresh (/glm-refresh) bypasses the freshness window but
@@ -433,17 +488,9 @@ export function GlmQuotaPanel(props: {
     "\u2500".repeat(Math.max(1, panelWidth() - gutter())),
   );
 
-  // ── Labeled value line: accent label + bright value, right-aligned ──
-  const labeledValue = (label: string, value: string): JSX.Element => {
-    const gauge = panelWidth() - gutter();
-    const gap = Math.max(1, gauge - visualWidth(label) - visualWidth(value));
-    return (
-      <text>
-        <span style={{ fg: pal().info }}>{label}</span>
-        <span style={{ fg: pal().accent }}>{" ".repeat(gap) + value}</span>
-      </text>
-    );
-  };
+  // ── Labeled value line: accent label + bright value, right-aligned.
+  // Rendered through the LabelRow component (below) — a plain function
+  // call here froze the gap at whatever panelWidth() was on mount. ──
 
   // ── External provider record (V2 data protocol; V1 → always null) ────
   // Non-null → the panel switches its data source: header shows the
@@ -496,11 +543,15 @@ export function GlmQuotaPanel(props: {
   /**
    * Value of the platform row — doubles as the source switcher on V2:
    * the live external label, the pinned source, or the GLM credential
-   * platform, in that order.
+   * platform, in that order. Our own `./server` snapshot (its provider id
+   * is one of the GLM aliases the server registers under) is NOT external
+   * for this row: its label "GLM" is the header identity, and the row
+   * keeps the native function-derived platform name (e.g. "ZHIPU").
    */
   const platformValue = createMemo<string>(() => {
     const e = extRec();
-    if (e) return e.label;
+    if (e && !(CANDIDATE_PROVIDER_IDS as readonly string[]).includes(e.provider))
+      return e.label;
     return sourceLabel();
   });
 
@@ -545,17 +596,23 @@ export function GlmQuotaPanel(props: {
     );
   });
 
-  // ── Folded header percentage (5h usage; first group for external) ──
+  // ── Folded header percentage (5h usage; first BAR group for external —
+  // label groups carry no percentage) ──
+  const firstExternalBar = createMemo(() => {
+    const e = extRec();
+    const first = e?.groups.find((g) => "bar" in g);
+    return first && "bar" in first ? first.bar : "";
+  });
   const foldedPctValue = createMemo(() => {
     const e = extRec();
-    if (e) return parseBarPercent(e.groups[0]?.bar ?? "") ?? 0;
+    if (e) return parseBarPercent(firstExternalBar()) ?? 0;
     if (pinnedExt()) return 0;
     return quotaData()?.fiveHour?.percentage ?? 0;
   });
   const foldedPct = createMemo(() => {
     const e = extRec();
     if (e) {
-      const pct = parseBarPercent(e.groups[0]?.bar ?? "");
+      const pct = parseBarPercent(firstExternalBar());
       return pct === null ? "" : formatPercentage(pct);
     }
     if (pinnedExt()) return "";
@@ -603,13 +660,7 @@ export function GlmQuotaPanel(props: {
       used !== null && total !== null
         ? formatNumber(used) + "/" + formatNumber(total)
         : formatPercentage(percentage);
-    let reset: string | null = null;
-    if (resetTime !== null) {
-      const countdown = formatResetCountdown(resetTime);
-      const clock = formatResetClock(resetTime);
-      reset =
-        t().resetsIn + ": " + countdown + (clock ? " (" + clock + ")" : "");
-    }
+    const reset = resetLineOf(resetTime, t());
     return (
       <QuotaBar
         title={label}
@@ -712,7 +763,12 @@ export function GlmQuotaPanel(props: {
           when={switchable()}
           fallback={
             <Show when={showGlm() && platformName()}>
-              {labeledValue(t().platform + ":", platformName())}
+              <LabelRow
+                label={t().platform}
+                value={platformName()}
+                width={panelWidth() - gutter()}
+                palette={pal()}
+              />
             </Show>
           }
         >
@@ -725,20 +781,32 @@ export function GlmQuotaPanel(props: {
         </Show>
 
         {/* External provider record: data source follows the selected
-            provider, or the pinned source when set. Groups render through
-            the same QuotaBar base; title and resetTime are display-ready
-            (the writer owns i18n). */}
+            provider, or the pinned source when set. Bar groups render
+            through the same QuotaBar base (their wire resetTime is raw
+            Time — the line is composed locally, countdown vs now);
+            label groups render as the native-style right-aligned
+            key/value rows; title and value are display-ready (the
+            writer owns i18n). */}
         <Show when={extRec()}>
           <For each={extRec()!.groups}>
-            {(g) => (
-              <QuotaBar
-                title={g.title}
-                bar={g.bar}
-                resetTime={g.resetTime ?? null}
-                width={panelWidth() - gutter()}
-                palette={pal()}
-              />
-            )}
+            {(g) =>
+              "value" in g ? (
+                <LabelRow
+                  label={g.title}
+                  value={g.value}
+                  width={panelWidth() - gutter()}
+                  palette={pal()}
+                />
+              ) : (
+                <QuotaBar
+                  title={g.title}
+                  bar={g.bar}
+                  resetTime={resetLineOf(g.resetTime ?? null, t())}
+                  width={panelWidth() - gutter()}
+                  palette={pal()}
+                />
+              )
+            }
           </For>
         </Show>
 
@@ -753,7 +821,12 @@ export function GlmQuotaPanel(props: {
 
         {/* Plan level */}
         <Show when={showGlm() && quotaData()?.level}>
-          {labeledValue(t().plan + ":", quotaData()!.level!)}
+          <LabelRow
+            label={t().plan}
+            value={quotaData()!.level!}
+            width={panelWidth() - gutter()}
+            palette={pal()}
+          />
         </Show>
 
         {/* Loading state */}
