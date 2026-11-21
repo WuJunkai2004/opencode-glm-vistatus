@@ -155,6 +155,24 @@ function ProviderGate(props: {
     if (r) learnSource(r.provider, r.label);
   });
 
+  // 显示条件 = 按当前供应商显示: switching the prompt's provider re-syncs
+  // the switcher to the new provider's entry — a manual pin is an
+  // override that lasts until the next provider switch (auto-follow on
+  // the cleared pin probes the selected provider, which IS the
+  // corresponding entry). 显示条件 = 固定: no jump, the pin survives.
+  let prevProvider: string | undefined;
+  createEffect(() => {
+    const id = currentProvider()?.trim().toLowerCase();
+    const prev = prevProvider;
+    prevProvider = id;
+    if (!props.signals.manualSource() || !props.signals.providerFilter()) return;
+    if (!id || prev === undefined || prev === id) return;
+    try {
+      void props.kv.set(`${KV}.pin`, null);
+    } catch {}
+    props.signals.setPinProvider(null);
+  });
+
   // Mount-time discovery sweep: probe every provider the host lists once,
   // so sources are discoverable without being selected first.
   // ── Discovery sweep (mount, once) ────────────────────────────────────

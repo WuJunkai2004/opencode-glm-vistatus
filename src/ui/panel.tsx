@@ -24,7 +24,7 @@ import {
 } from "solid-js";
 import { PLUGIN_VERSION } from "../_version";
 
-import { CANDIDATE_PROVIDER_IDS, getCredentials } from "../utils/auth";
+import { getCredentials } from "../utils/auth";
 import { fetchAllQuota } from "../api/client";
 import {
   SHARED_RECORD_KEY,
@@ -474,10 +474,14 @@ export function GlmQuotaPanel(props: {
    *  silent fall-back to GLM data — otherwise a pinned-but-empty source
    *  would misleadingly show GLM numbers). */
   const showGlm = createMemo(() => !extRec() && !pinnedExt());
-  /** Cycle list: learned sources, oldest discovery first for a stable
-   *  order. Reactive on V2 (kv.get reads a Solid store); empty on V1.
-   *  Declared before `switchable`, which reads it during the eager first
-   *  memo computation. */
+  /** The source list: learned sources, oldest discovery first for a
+   *  stable order. Reactive on V2 (kv.get reads a Solid store); empty
+   *  on V1. There is NO auto/null state in the cycle — the row is a
+   *  plain source selector over these entries; "follow the selected
+   *  provider" is not a list state but the unpinned rendering of the
+   *  same entries (and under 按当前供应商显示 a provider switch re-syncs
+   *  via the gate's pin-clear). Declared before `switchable`, which
+   *  reads it during the eager first memo computation. */
   const candList = createMemo<PinCandidate[]>(() => {
     const learned = props.kv.get<SourceMap>(SOURCES_KEY) ?? {};
     return Object.entries(learned)
@@ -498,17 +502,16 @@ export function GlmQuotaPanel(props: {
   });
 
   /**
-   * Value of the platform row — doubles as the source switcher on V2:
-   * the live external label, the pinned source, or the GLM credential
-   * platform, in that order. Our own `./server` snapshot (its provider id
-   * is one of the GLM aliases the server registers under) is NOT external
-   * for this row: its label "GLM" is the header identity, and the row
-   * keeps the native function-derived platform name (e.g. "ZHIPU").
+   * Value of the platform row — the ACTIVE data source's identity. A
+   * live snapshot always wins with its own wire label: one source = one
+   * name, in auto and when pinned alike (the switcher's entries are
+   * these same labels, so the row and the list can never disagree).
+   * Without a snapshot the pinned entry's label, then the native
+   * platform name, fall back in order.
    */
   const platformValue = createMemo<string>(() => {
     const e = extRec();
-    if (e && !(CANDIDATE_PROVIDER_IDS as readonly string[]).includes(e.provider))
-      return e.label;
+    if (e) return e.label;
     return sourceLabel();
   });
 
@@ -519,15 +522,19 @@ export function GlmQuotaPanel(props: {
     return c ? t().pinOffline : t().pinUnknown;
   });
 
-  /** Cycle the pinned source: auto → discovered providers → auto. Every
-   *  state is visually distinct (the GLM view IS the auto state when a
-   *  GLM model is selected). Persisted via `${KV}.pin`. */
+  /** Cycle the pinned source through the learned list. No auto state:
+   *  the cycle continues from the ACTIVE entry — the pin when set,
+   *  otherwise the entry whose label matches the snapshot the selection
+   *  is already displaying — and wraps around (-1 → first entry).
+   *  Persisted via `${KV}.pin`. */
   const cycleSource = () => {
     const cands = candList();
-    const order: (string | null)[] = [null, ...cands.map((c) => c.id)];
-    const cur = pinValue();
-    const idx = order.findIndex((o) => (o ?? null) === cur);
-    const next = order[(idx + 1) % order.length] ?? null;
+    if (cands.length === 0) return;
+    const byId = cands.findIndex((c) => c.id === pinValue());
+    const byLabel =
+      byId >= 0 ? -1 : cands.findIndex((c) => c.label === extRec()?.label);
+    const idx = byId >= 0 ? byId : byLabel;
+    const next = cands[(idx + 1) % cands.length]!.id;
     try {
       void props.kv.set(`${KV}.pin`, next);
     } catch {}
@@ -709,17 +716,18 @@ export function GlmQuotaPanel(props: {
         {/* Separator */}
         <text fg={pal().muted}>{sep()}</text>
 
-        {/* Platform row — with manual switching on (V2), the value shows
-            the active source followed by a single ▶ next-hint. The
-            onMouseUp handler sits on the enclosing <text> — the hit-test
-            unit — so the WHOLE row (label, gap, value, triangle) is one
-            click target advancing to the next source (auto → discovered
-            providers → auto). Off or V1: the plain platform line,
-            exactly as before. */}
+        {/* Platform row — with manual switching on (V2) this is the
+            source selector: the value is the ACTIVE source's label and
+            the single ▶ is the next-hint. The onMouseUp handler sits on
+            the enclosing <text> — the hit-test unit — so the WHOLE row
+            (label, gap, value, triangle) is one click target advancing
+            to the next learned source (no auto state in the cycle; the
+            cycle continues from the active entry and wraps). Off or V1:
+            the plain platform line, exactly as before. */}
         <Show
           when={switchable()}
           fallback={
-            <Show when={showGlm() && platformName()}>
+            <Show when={!props.signals.manualSource() && showGlm() && platformName()}>
               <LabelRow
                 label={t().platform}
                 value={platformName()}
