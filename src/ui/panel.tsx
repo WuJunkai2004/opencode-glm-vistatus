@@ -46,13 +46,16 @@ import { getPlatformName } from "../api/platforms";
 import {
   formatNumber,
   formatPercentage,
-  formatResetCountdown,
-  formatResetClock,
   formatClockShort,
 } from "../utils/format";
 import { visualWidth, truncateVisual } from "./widgets";
 import { buildPalette, dimColor, quotaColor, type ThemePalette } from "./theme";
-import { QuotaBar, parseBarPercent } from "./quota-block";
+import {
+  LabelRow,
+  QuotaBar,
+  parseBarPercent,
+  resetLineOf,
+} from "./quota-block";
 import { getTranslations, type Translations } from "./i18n";
 
 // ---------------------------------------------------------------------------
@@ -213,52 +216,6 @@ const DEFAULT_PANEL_WIDTH = 30;
 
 // Layout measurement constants (visual columns)
 const HEADER_PREFIX = 2; // "▼ " or "▶ "
-
-/** Compose the reset line from a raw timestamp — countdown vs now plus
- * clock/day (weekday shown once the horizon exceeds 12h), e.g.
- * "重置: 2h 30m (23:43)" / "重置: 4d 17h (Thu 16:03)".
- * A past or absent timestamp renders no line. Shared by the GLM path
- * and external records (whose wire carries raw `Time`). */
-function resetLineOf(
-  resetTime: number | null,
-  t: Translations,
-): string | null {
-  if (resetTime === null) return null;
-  const countdown = formatResetCountdown(resetTime);
-  if (countdown === "—") return null;
-  const clock = formatResetClock(resetTime);
-  return t.resetsIn + ": " + countdown + (clock ? " (" + clock + ")" : "");
-}
-
-/** Label row — accent title + bright value, right-aligned to `width`.
- * The reader renders the colon (`title:`), so the wire carries bare
- * names; the colon budgets one visual column in the alignment.
- * A COMPONENT with memos, not a plain function call: Solid bodies run
- * once, so the gap must re-derive from reactive props or the row
- * freezes at whatever panelWidth() was at mount (the QuotaBar pitfall,
- * label flavor — `panelWidth` starts at the default and only reaches
- * its real value after the first layout). */
-function LabelRow(props: {
-  label: string;
-  value: string;
-  width: number;
-  palette: ThemePalette;
-}): JSX.Element {
-  const gap = createMemo(() =>
-    Math.max(
-      1,
-      props.width - visualWidth(props.label) - 1 - visualWidth(props.value),
-    ),
-  );
-  return (
-    <text>
-      <span style={{ fg: props.palette.info }}>{props.label + ":"}</span>
-      <span style={{ fg: props.palette.accent }}>
-        {" ".repeat(gap()) + props.value}
-      </span>
-    </text>
-  );
-}
 
 export function GlmQuotaPanel(props: {
   theme: TuiThemeCurrent;
@@ -489,7 +446,7 @@ export function GlmQuotaPanel(props: {
   );
 
   // ── Labeled value line: accent label + bright value, right-aligned.
-  // Rendered through the LabelRow component (below) — a plain function
+  // Rendered through quota-block's LabelRow component — a plain function
   // call here froze the gap at whatever panelWidth() was on mount. ──
 
   // ── External provider record (V2 data protocol; V1 → always null) ────

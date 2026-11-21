@@ -1,12 +1,18 @@
 /**
- * Quota bar block — the neutral display base shared by every provider
+ * Quota row blocks — the neutral display base shared by every provider
  * integration (GLM today; atomcode / codearts next).
  *
- * One group renders up to three lines:
+ * Two row kinds (the two `ExternalQuotaGroup` wire forms):
  *
- *   line 1: title                xx/yy (right, only for "xx/yy" bars)
- *   line 2: [████░░░░]           nn%   (right, always a percentage)
- *   line 3: resetTime (optional)
+ * - `QuotaBar` — a bar row, up to three lines:
+ *
+ *     line 1: title                xx/yy (right, only for "xx/yy" bars)
+ *     line 2: [████░░░░]           nn%   (right, always a percentage)
+ *     line 3: resetTime (optional)
+ *
+ * - `LabelRow` — a label row: right-aligned key/value metadata line
+ *   (platform, plan, …), title rendered with the trailing `title:`
+ *   colon that budgets one visual column.
  *
  * `bar` is a plain string in one of two forms:
  *
@@ -18,15 +24,21 @@
  * percentage derived from it (`parseBarPercent` also derives the fill
  * and the color). An unparseable string falls back to neutral accent +
  * empty fill, right of the bar — a provider can never crash the panel
- * by passing an odd string. `resetTime` is display-ready — the caller
- * owns i18n/formatting (e.g. "重置: 2h 48m (17:34)").
+ * by passing an odd string. `resetTime` on the component is
+ * display-ready; compose it from the wire's raw `Time` with
+ * `resetLineOf` (same module) — both GLM and external paths share it.
  */
 
 import type { JSX } from "@opentui/solid";
 import { Show, createMemo } from "solid-js";
 import { progressBar, visualWidth } from "./widgets";
 import { quotaColor, type ThemePalette } from "./theme";
-import { formatPercentage } from "../utils/format";
+import {
+  formatPercentage,
+  formatResetCountdown,
+  formatResetClock,
+} from "../utils/format";
+import type { Translations } from "./i18n";
 
 /** "[" + "]" — visual columns around the bar. */
 const BAR_BRACKETS = 2;
@@ -151,5 +163,52 @@ export function QuotaBar(props: {
         </text>
       </Show>
     </>
+  );
+}
+
+/** Compose the reset line from a raw timestamp — countdown vs now plus
+ * clock/day (weekday shown once the horizon exceeds 12h), e.g.
+ * "重置: 2h 30m (23:43)" / "重置: 4d 17h (Thu 16:03)". A past or absent
+ * timestamp renders no line. Shared by the GLM path and external
+ * records (whose wire carries raw `Time`) — the one place that turns
+ * the protocol's canonical time into the display line. */
+export function resetLineOf(
+  resetTime: number | null,
+  t: Translations,
+): string | null {
+  if (resetTime === null) return null;
+  const countdown = formatResetCountdown(resetTime);
+  if (countdown === "—") return null;
+  const clock = formatResetClock(resetTime);
+  return t.resetsIn + ": " + countdown + (clock ? " (" + clock + ")" : "");
+}
+
+/** Label row — accent title + bright value, right-aligned to `width`.
+ * The reader renders the colon (`title:`), so the wire carries bare
+ * names; the colon budgets one visual column in the alignment.
+ * A COMPONENT with memos, not a plain function call: Solid bodies run
+ * once, so the gap must re-derive from reactive props or the row
+ * freezes at whatever panelWidth() was at mount (the QuotaBar pitfall,
+ * label flavor — `panelWidth` starts at the default and only reaches
+ * its real value after the first layout). */
+export function LabelRow(props: {
+  label: string;
+  value: string;
+  width: number;
+  palette: ThemePalette;
+}): JSX.Element {
+  const gap = createMemo(() =>
+    Math.max(
+      1,
+      props.width - visualWidth(props.label) - 1 - visualWidth(props.value),
+    ),
+  );
+  return (
+    <text>
+      <span style={{ fg: props.palette.info }}>{props.label + ":"}</span>
+      <span style={{ fg: props.palette.accent }}>
+        {" ".repeat(gap()) + props.value}
+      </span>
+    </text>
   );
 }
