@@ -20,3 +20,18 @@ await esbuild.build({
     }),
   ],
 });
+
+// Server entry — dist/index.js (the `./server` export target AND the
+// local-directory plugin convention: a config entry pointing at a
+// directory makes the server load that directory's index.js — verified
+// against host v2.3.0; the sibling providers ship dist/index.js the same
+// way). Pure node code, no JSX — no solid plugin; same externals policy
+// as the TUI bundle.
+await esbuild.build({
+  entryPoints: ["src/server.ts"],
+  outfile: "dist/index.js",
+  format: "esm",
+  platform: "node",
+  bundle: true,
+  external: ["@opencode-ai/*", "@opentui/*", "solid-js"],
+});
