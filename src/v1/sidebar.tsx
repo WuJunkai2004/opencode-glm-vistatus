@@ -26,11 +26,7 @@ export function createSidebarSlot(
         _input: { session_id: string },
       ): JSX.Element {
         return (
-          <GlmQuotaPanel
-            theme={ctx.theme.current}
-            kv={kv}
-            signals={signals}
-          />
+          <GlmQuotaPanel theme={ctx.theme.current} kv={kv} signals={signals} />
         );
       },
     },

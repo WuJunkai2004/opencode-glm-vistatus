@@ -10,7 +10,11 @@
  * commands live in `src/v1/commands.tsx`.
  */
 
-import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui";
+import type {
+  TuiPlugin,
+  TuiPluginApi,
+  TuiPluginModule,
+} from "@opencode-ai/plugin/tui";
 
 import { createKv } from "./kv";
 import { createPanelSignals, restorePanelConfig } from "../utils/panel-signals";

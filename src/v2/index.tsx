@@ -51,7 +51,12 @@ import { mapTheme } from "./theme";
 import { makeCommands } from "./commands";
 
 /** Command layer host — mounted in the always-present `app` slot. */
-function CommandRoot(props: { context: Context; kv: KvAdapter; signals: PanelSignals; projectDir: string }): JSX.Element {
+function CommandRoot(props: {
+  context: Context;
+  kv: KvAdapter;
+  signals: PanelSignals;
+  projectDir: string;
+}): JSX.Element {
   props.context.keymap.layer(() => ({
     mode: "global",
     commands: makeCommands({
@@ -60,8 +65,8 @@ function CommandRoot(props: { context: Context; kv: KvAdapter; signals: PanelSig
       signals: props.signals,
       projectDir: props.projectDir,
     }),
-  }))
-  return null
+  }));
+  return null;
 }
 
 /**
@@ -150,8 +155,7 @@ function ProviderGate(props: {
     const seen = new Set<string>();
     const candidates: string[] = [];
     const addCandidate = (raw: unknown) => {
-      const id =
-        typeof raw === "string" ? raw.trim().toLowerCase() : undefined;
+      const id = typeof raw === "string" ? raw.trim().toLowerCase() : undefined;
       if (
         !id ||
         seen.has(id) ||
@@ -223,17 +227,19 @@ function ProviderGate(props: {
 const mod: PluginModule = {
   id: "opencode-glm-vistatus",
   setup(context: Context) {
-    const kv = createKv(context, KV)
+    const kv = createKv(context, KV);
 
     // ── Shared signals + persisted config restore (V2 storage is sync-ready) ──
-    const signals = createPanelSignals()
-    restorePanelConfig(kv, signals)
-    signals.setMatchedProviders(normalizeProviderList(context.options?.matchedProviders))
+    const signals = createPanelSignals();
+    restorePanelConfig(kv, signals);
+    signals.setMatchedProviders(
+      normalizeProviderList(context.options?.matchedProviders),
+    );
 
     const projectDir =
       context.location?.directory ||
       (typeof process !== "undefined" ? process.cwd() : "") ||
-      "."
+      ".";
 
     // ── Sidebar quota panel (shared component, V1-identical layout) ──
     context.ui.slot({
@@ -249,7 +255,7 @@ const mod: PluginModule = {
           )}
         </ProviderGate>
       ),
-    })
+    });
 
     // ── Command layer (always mounted; survives sidebar hide/narrow) ──
     context.ui.slot({
@@ -262,8 +268,8 @@ const mod: PluginModule = {
           projectDir={projectDir}
         />
       ),
-    })
+    });
   },
-}
+};
 
-export default mod
+export default mod;

@@ -96,11 +96,11 @@ A **fresh TUI process** is required either way: a running TUI caches ESM by URL 
 
 ## Slash commands (registered in `src/v1/commands.tsx` and `src/v2/commands.ts`)
 
-| Command           | Action                                                          |
-| ----------------- | --------------------------------------------------------------- |
-| `/glm-refresh`    | Force-refresh quota data immediately                            |
+| Command           | Action                                                                       |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `/glm-refresh`    | Force-refresh quota data immediately                                         |
 | `/glm-config`     | Interactive settings: language / border / refresh interval / visibility (V2) |
-| `/glm-mcp-manage` | Install / uninstall GLM MCP servers (alias: `/glm-mcp-install`) |
+| `/glm-mcp-manage` | Install / uninstall GLM MCP servers (alias: `/glm-mcp-install`)              |
 
 Language, border and refresh-interval preferences are persisted via plugin KV and survive restarts. Refresh interval: presets 1/2/5/10/30/60 min + custom (1–1440 min, validated in `/glm-config`), default 5 min, timer reschedules reactively when changed.
 

@@ -109,6 +109,8 @@ export function restorePanelConfig(kv: KvAdapter, signals: PanelSignals): void {
       kv.get<boolean>(`${KV}.providerFilter`, false) === true,
     );
     signals.setPinProvider(normalizePin(kv.get<unknown>(`${KV}.pin`)));
-    signals.setManualSource(kv.get<boolean>(`${KV}.manualSource`, false) === true);
+    signals.setManualSource(
+      kv.get<boolean>(`${KV}.manualSource`, false) === true,
+    );
   } catch {}
 }

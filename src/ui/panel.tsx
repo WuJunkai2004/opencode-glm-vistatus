@@ -206,9 +206,7 @@ export function createExternalRecordTrack(
     // trip — and stays cleared even while a failed target is in backoff
     // (whose early-return would otherwise leave the old record up, e.g.
     // pinning back to auto after watching an external source).
-    setRecord((r) =>
-      r && r.provider !== (target ?? "") ? null : r,
-    );
+    setRecord((r) => (r && r.provider !== (target ?? "") ? null : r));
   });
   const timer = setInterval(() => void probe(), EXTERNAL_RECORD_POLL_MS);
   onCleanup(() => clearInterval(timer));
