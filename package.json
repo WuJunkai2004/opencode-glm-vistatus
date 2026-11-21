@@ -1,6 +1,6 @@
 {
   "name": "opencode-glm-vistatus",
-  "version": "1.9.0",
+  "version": "2.0.0",
   "description": "OpenCode TUI plugin displaying real-time GLM Coding Plan quota usage in the sidebar",
   "author": "Wu Junkai <wu.junkai@qq.com>",
   "type": "module",
