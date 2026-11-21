@@ -294,3 +294,17 @@ const EN_SETTINGS: SettingsI18n = {
 export function getSettingsTranslations(langZH: boolean): SettingsI18n {
   return langZH ? ZH_SETTINGS : EN_SETTINGS;
 }
+
+/** Initial language: `GLM_VISTATUS_LANG=zh|en` env override, else locale.
+ * Lives here (not in panel.tsx) so non-Solid consumers — the `./server`
+ * bundle — share the exact same rule without dragging in the renderer. */
+export function detectLangZH(): boolean {
+  const debug =
+    typeof process !== "undefined" ? process.env?.GLM_VISTATUS_LANG : undefined;
+  if (debug) return debug === "zh";
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().locale.startsWith("zh");
+  } catch {
+    return false;
+  }
+}

@@ -70,17 +70,8 @@ export const MAX_REFRESH_INTERVAL_MIN = 1440; // 24h
 const FRESH_WINDOW_SLACK_MS = 10_000;
 const MIN_FRESH_WINDOW_MS = 15_000;
 
-/** Initial language: `GLM_VISTATUS_LANG=zh|en` env override, else locale. */
-export function detectLangZH(): boolean {
-  const debug =
-    typeof process !== "undefined" ? process.env?.GLM_VISTATUS_LANG : undefined;
-  if (debug) return debug === "zh";
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().locale.startsWith("zh");
-  } catch {
-    return false;
-  }
-}
+/** Initial language detection lives in ./i18n (shared with ./server). */
+export { detectLangZH } from "./i18n";
 
 // ---------------------------------------------------------------------------
 // Host-neutral contracts
